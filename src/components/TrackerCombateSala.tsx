@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { CombatantCard } from './CombatantCard';
-import { AddCombatantDialog } from './AddCombatantDialog';
-import { SelectExistingCharacterDialog } from './SelectExistingCharacterDialog';
-import { NPCLibrary } from './NPCLibrary';
-import { DiceRoller } from './DiceRoller';
+import { CombatantCard } from './PersonagemCard';
+import { AddCombatantDialog } from './AddPersonagemDialog';
+import { SelectExistingCharacterDialog } from './AddPersonagemExistenteDialog';
+import { NPCLibrary } from './BibliotecaNPC';
+import { DiceRoller } from './RoladorDados';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Swords, RotateCcw, Play, ArrowLeft, Users, Crown, Flag } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { apiRequest } from '../utils/api';
-import type { Combatant } from './CombatTracker';
+import type { Combatant } from './TrackerCombate';
 import {
   Dialog,
   DialogContent,

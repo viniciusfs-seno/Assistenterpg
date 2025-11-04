@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
-import { LoginPage } from './components/LoginPage';
-import { MainMenu } from './components/MainMenu';
-import { RoomCombatTracker } from './components/RoomCombatTracker';
+import { LoginPage } from './components/PaginaLogin';
+import { MainMenu } from './components/PaginaMenuPrincipal';
+import { RoomCombatTracker } from './components/TrackerCombateSala'
 import { Sword } from 'lucide-react';
 
 function AppContent() {

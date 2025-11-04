@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { RoomManager } from './RoomManager';
-import { CharacterManager } from './CharacterManager';
-import { CombatTracker } from './CombatTracker';
+import { RoomManager } from './GerenciadorSala';
+import { CharacterManager } from './GerenciadorPersonagem';
+import { CombatTracker } from './TrackerCombate';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Sword, LogOut, Users, Home, Swords } from 'lucide-react';

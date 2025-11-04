@@ -5,10 +5,10 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Users, Trash2, Heart, Zap } from 'lucide-react';
-import { AddCombatantDialog } from './AddCombatantDialog';
-import { DebugCharacters } from './DebugCharacters';
+import { AddCombatantDialog } from './AddPersonagemDialog';
+import { DebugCharacters } from './DebugPersonagens';
 import { apiRequest } from '../utils/api';
-import type { Combatant } from './CombatTracker';
+import type { Combatant } from './TrackerCombate';
 
 export function CharacterManager() {
   const { getAccessToken } = useAuth();

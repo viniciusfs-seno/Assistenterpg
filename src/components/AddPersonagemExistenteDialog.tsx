@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Users, Heart, Zap, Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { apiRequest } from '../utils/api';
-import type { Combatant } from './CombatTracker';
+import type { Combatant } from './TrackerCombate';
 
 interface SelectExistingCharacterDialogProps {
   onSelect: (character: Omit<Combatant, 'id'>) => void;

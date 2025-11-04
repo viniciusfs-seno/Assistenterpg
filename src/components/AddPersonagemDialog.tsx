@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { UserPlus } from 'lucide-react';
-import { Combatant } from './CombatTracker';
+import { Combatant } from './TrackerCombate';
 
 interface AddCombatantDialogProps {
   onAdd: (combatant: Omit<Combatant, 'id'>) => void;

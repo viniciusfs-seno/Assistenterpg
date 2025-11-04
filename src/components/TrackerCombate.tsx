@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { CombatantCard } from "./CombatantCard";
-import { AddCombatantDialog } from "./AddCombatantDialog";
-import { SelectExistingCharacterDialog } from "./SelectExistingCharacterDialog";
+import { CombatantCard } from "./PersonagemCard";
+import { AddCombatantDialog } from "./AddPersonagemDialog";
+import { SelectExistingCharacterDialog } from "./AddPersonagemExistenteDialog";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Swords, RotateCcw, Play, Pause, Flag } from "lucide-react";
