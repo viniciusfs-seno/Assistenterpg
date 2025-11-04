@@ -8,10 +8,17 @@ import { DiceRoller } from './DiceRoller';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Swords, RotateCcw, Play, ArrowLeft, Users, Crown } from 'lucide-react';
+import { Swords, RotateCcw, Play, ArrowLeft, Users, Crown, Flag } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { apiRequest } from '../utils/api';
 import type { Combatant } from './CombatTracker';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from './ui/dialog';
 
 interface RoomCombatTrackerProps {
   roomCode: string;
@@ -26,8 +33,12 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const [combatStarted, setCombatStarted] = useState(false);
   const [round, setRound] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [showCombatReport, setShowCombatReport] = useState(false);
 
   const sortedCombatants = [...combatants].sort((a, b) => b.initiative - a.initiative);
+  
+  // Filter out deceased combatants for turn order
+  const activeCombatants = sortedCombatants.filter(c => !c.isDeceased);
 
   // Player's own combatant
   const playerCombatant = sortedCombatants.find(
@@ -85,6 +96,10 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
     const newCombatant = {
       ...combatant,
       id: `${isDM ? 'npc' : `player_${user?.id}`}_${Date.now()}`,
+      damageTaken: 0,
+      damageDealt: 0,
+      deathSaveCount: 3,
+      isDeceased: false,
     };
     const updatedCombatants = [...combatants, newCombatant];
     setCombatants(updatedCombatants);
@@ -92,7 +107,7 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   };
 
   const removeCombatant = async (id: string) => {
-    const index = sortedCombatants.findIndex(c => c.id === id);
+    const index = activeCombatants.findIndex(c => c.id === id);
     if (combatStarted && index < currentTurnIndex) {
       const newIndex = Math.max(0, currentTurnIndex - 1);
       setCurrentTurnIndex(newIndex);
@@ -108,24 +123,80 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   };
 
   const updateCombatant = async (id: string, updates: Partial<Combatant>) => {
-    const updatedCombatants = combatants.map(c => 
-      c.id === id ? { ...c, ...updates } : c
+    const updatedCombatants = combatants.map(c => {
+      if (c.id !== id) return c;
+      
+      const updated = { ...c, ...updates };
+      
+      // Track damage taken
+      if (updates.health !== undefined && updates.health < c.health) {
+        const damageTaken = c.health - updates.health;
+        updated.damageTaken = (c.damageTaken || 0) + damageTaken;
+      }
+      
+      // When health drops to 0, initialize death saves
+      if (updated.health === 0 && c.health > 0 && !updated.isDeceased) {
+        updated.deathSaveCount = 3;
+      }
+      
+      // When health goes above 0, clear death saves
+      if (updated.health > 0) {
+        updated.deathSaveCount = undefined;
+        updated.isDeceased = false;
+      }
+      
+      return updated;
+    });
+    setCombatants(updatedCombatants);
+    await updateRoom({ combatants: updatedCombatants });
+  };
+
+  const reviveCombatant = async (id: string) => {
+    const updatedCombatants = combatants.map(c =>
+      c.id === id
+        ? { 
+            ...c, 
+            health: 1, 
+            deathSaveCount: undefined, 
+            isDeceased: false 
+          }
+        : c
     );
     setCombatants(updatedCombatants);
     await updateRoom({ combatants: updatedCombatants });
   };
 
   const nextTurn = async () => {
-    if (sortedCombatants.length === 0) return;
+    if (activeCombatants.length === 0) return;
+
+    // Process death saves for defeated combatants
+    const updatedWithDeathSaves = combatants.map(c => {
+      if (c.health === 0 && !c.isDeceased && c.deathSaveCount !== undefined) {
+        const newCount = c.deathSaveCount - 1;
+        if (newCount <= 0) {
+          return { ...c, deathSaveCount: 0, isDeceased: true };
+        }
+        return { ...c, deathSaveCount: newCount };
+      }
+      return c;
+    });
+    setCombatants(updatedWithDeathSaves);
     
     const nextIndex = currentTurnIndex + 1;
-    if (nextIndex >= sortedCombatants.length) {
+    if (nextIndex >= activeCombatants.length) {
       setCurrentTurnIndex(0);
       setRound(round + 1);
-      await updateRoom({ currentTurnIndex: 0, round: round + 1 });
+      await updateRoom({ 
+        combatants: updatedWithDeathSaves,
+        currentTurnIndex: 0, 
+        round: round + 1 
+      });
     } else {
       setCurrentTurnIndex(nextIndex);
-      await updateRoom({ currentTurnIndex: nextIndex });
+      await updateRoom({ 
+        combatants: updatedWithDeathSaves,
+        currentTurnIndex: nextIndex 
+      });
     }
   };
 
@@ -143,6 +214,10 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
       ...c,
       health: c.maxHealth,
       stamina: c.maxStamina,
+      deathSaveCount: 3,
+      isDeceased: false,
+      damageTaken: 0,
+      damageDealt: 0,
     }));
     setCombatStarted(false);
     setCurrentTurnIndex(0);
@@ -154,6 +229,10 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
       currentTurnIndex: 0,
       round: 1,
     });
+  };
+
+  const endCombat = () => {
+    setShowCombatReport(true);
   };
 
   const clearAll = async () => {
