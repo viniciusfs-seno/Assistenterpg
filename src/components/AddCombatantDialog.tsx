@@ -50,7 +50,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
       <DialogTrigger asChild>
         <Button className="bg-purple-600 hover:bg-purple-700">
           <UserPlus className="w-4 h-4 mr-2" />
-          Add Combatant
+          Adicionar Personagem
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700 text-white">
@@ -99,7 +99,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="stamina">Max Stamina</Label>
+                <Label htmlFor="stamina">Pontos de Esforço</Label>
                 <Input
                   id="stamina"
                   type="number"
@@ -113,9 +113,9 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="player-toggle">Player Character</Label>
+                <Label htmlFor="player-toggle">Jogador</Label>
                 <p className="text-sm text-slate-400">
-                  {isPlayer ? 'This is a player character' : 'This is an enemy/NPC'}
+                  {isPlayer ? 'Isso é um personagem de jogador' : 'Isso é um NPC'}
                 </p>
               </div>
               <Switch
@@ -133,10 +133,10 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
               onClick={() => setOpen(false)}
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
-              Add Combatant
+              Adicionar pesonagem
             </Button>
           </DialogFooter>
         </form>
