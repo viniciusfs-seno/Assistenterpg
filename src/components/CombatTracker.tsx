@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CombatantCard } from "./CombatantCard";
 import { AddCombatantDialog } from "./AddCombatantDialog";
+import { SelectExistingCharacterDialog } from "./SelectExistingCharacterDialog";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Swords, RotateCcw, Play, Pause } from "lucide-react";
@@ -104,6 +105,7 @@ export function CombatTracker() {
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2">
             <AddCombatantDialog onAdd={addCombatant} />
+            <SelectExistingCharacterDialog onSelect={addCombatant} />
             {!combatStarted ? (
               <Button
                 onClick={startCombat}

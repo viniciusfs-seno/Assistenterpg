@@ -6,6 +6,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Users, Trash2, Heart, Zap } from 'lucide-react';
 import { AddCombatantDialog } from './AddCombatantDialog';
+import { DebugCharacters } from './DebugCharacters';
 import { apiRequest } from '../utils/api';
 import type { Combatant } from './CombatTracker';
 
@@ -18,28 +19,50 @@ export function CharacterManager() {
   const fetchCharacters = async () => {
     try {
       const token = await getAccessToken();
-      const { characters: chars } = await apiRequest('/characters', {}, token!);
-      setCharacters(chars || []);
+      if (!token) {
+        setError('Sessão expirada. Por favor, faça login novamente.');
+        setLoading(false);
+        return;
+      }
+      console.log('Fetching characters...');
+      const response = await apiRequest('/characters', {}, token);
+      console.log('Characters response:', response);
+      const chars = response.characters;
+      // Filter out null/undefined values and ensure valid character structure
+      const validChars = (chars || []).filter((c: any) => c && c.id && c.name);
+      console.log('Valid characters:', validChars.length, validChars);
+      setCharacters(validChars);
       setLoading(false);
     } catch (err: any) {
+      console.error('Fetch characters error:', err);
       setError(err.message || 'Falha ao carregar personagens');
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    console.log('CharacterManager mounted, fetching characters...');
     fetchCharacters();
   }, []);
 
   const addCharacter = async (character: Omit<Combatant, 'id'>) => {
     try {
       const token = await getAccessToken();
-      const { character: newChar } = await apiRequest('/characters', {
+      if (!token) {
+        setError('Sessão expirada. Por favor, faça login novamente.');
+        return;
+      }
+      console.log('Creating character:', character);
+      const response = await apiRequest('/characters', {
         method: 'POST',
         body: JSON.stringify(character),
-      }, token!);
+      }, token);
+      console.log('Create character response:', response);
+      const newChar = response.character;
+      console.log('New character:', newChar);
       setCharacters([...characters, newChar]);
     } catch (err: any) {
+      console.error('Create character error:', err);
       setError(err.message || 'Falha ao criar personagem');
     }
   };
@@ -47,9 +70,13 @@ export function CharacterManager() {
   const deleteCharacter = async (id: string) => {
     try {
       const token = await getAccessToken();
+      if (!token) {
+        setError('Sessão expirada. Por favor, faça login novamente.');
+        return;
+      }
       await apiRequest(`/characters/${id}`, {
         method: 'DELETE',
-      }, token!);
+      }, token);
       setCharacters(characters.filter(c => c.id !== id));
     } catch (err: any) {
       setError(err.message || 'Falha ao deletar personagem');
@@ -66,13 +93,26 @@ export function CharacterManager() {
 
   return (
     <div className="space-y-6">
+      <DebugCharacters />
+      
       <Card className="p-4 bg-slate-800/50 border-slate-700">
         <div className="flex items-center justify-between">
           <h2 className="text-white flex items-center gap-2">
             <Users className="w-5 h-5" />
             Meus Personagens
           </h2>
-          <AddCombatantDialog onAdd={addCharacter} />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchCharacters}
+              disabled={loading}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Atualizar
+            </Button>
+            <AddCombatantDialog onAdd={addCharacter} />
+          </div>
         </div>
       </Card>
 
@@ -92,7 +132,7 @@ export function CharacterManager() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {characters.map((character) => (
+          {characters.filter(c => c && c.id).map((character) => (
             <Card
               key={character.id}
               className="p-4 bg-slate-800/50 border-slate-700 hover:border-slate-600 transition-colors"

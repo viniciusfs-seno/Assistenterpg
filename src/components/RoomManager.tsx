@@ -26,9 +26,14 @@ export function RoomManager({ onJoinRoom }: RoomManagerProps) {
     
     try {
       const token = await getAccessToken();
+      if (!token) {
+        setError('Sessão expirada. Por favor, faça login novamente.');
+        setLoading(false);
+        return;
+      }
       const { room } = await apiRequest('/rooms', {
         method: 'POST',
-      }, token!);
+      }, token);
       
       setCreatedRoomCode(room.code);
       onJoinRoom(room.code, true);
@@ -50,7 +55,12 @@ export function RoomManager({ onJoinRoom }: RoomManagerProps) {
     
     try {
       const token = await getAccessToken();
-      const { room } = await apiRequest(`/rooms/${roomCode.toUpperCase()}`, {}, token!);
+      if (!token) {
+        setError('Sessão expirada. Por favor, faça login novamente.');
+        setLoading(false);
+        return;
+      }
+      const { room } = await apiRequest(`/rooms/${roomCode.toUpperCase()}`, {}, token);
       
       onJoinRoom(room.code, false);
     } catch (err: any) {

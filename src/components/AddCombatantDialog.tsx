@@ -50,14 +50,14 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
       <DialogTrigger asChild>
         <Button className="bg-purple-600 hover:bg-purple-700">
           <UserPlus className="w-4 h-4 mr-2" />
-          Adicionar Personagem
+          Novo Personagem
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700 text-white">
         <DialogHeader>
-          <DialogTitle>Adicionar Personagem</DialogTitle>
+          <DialogTitle>Criar Novo Personagem</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Adiciona um novo personagem para o Tracker
+            Crie um novo personagem do zero
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

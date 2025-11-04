@@ -42,17 +42,52 @@ app.post('/make-server-9334e2c0/signup', async (c) => {
 
 // ===== CHARACTER ROUTES =====
 
+// Debug endpoint to test database
+app.get('/make-server-9334e2c0/test-db', async (c) => {
+  try {
+    console.log('Testing database connection...');
+    
+    // Try to set a test value
+    const testKey = 'test:' + Date.now();
+    const testValue = { message: 'test', timestamp: Date.now() };
+    await kv.set(testKey, testValue);
+    console.log('Set test value with key:', testKey);
+    
+    // Try to get it back
+    const retrieved = await kv.get(testKey);
+    console.log('Retrieved test value:', JSON.stringify(retrieved));
+    
+    // Clean up
+    await kv.del(testKey);
+    console.log('Cleaned up test value');
+    
+    return c.json({ 
+      success: true, 
+      message: 'Database working correctly',
+      testValue,
+      retrieved 
+    });
+  } catch (error) {
+    console.log('Database test error:', error);
+    return c.json({ error: error.message || 'Database test failed' }, 500);
+  }
+});
+
 app.get('/make-server-9334e2c0/characters', async (c) => {
   try {
     const accessToken = c.req.header('Authorization')?.split(' ')[1];
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (!user || authError) {
+      console.log('Get characters - unauthorized:', authError);
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const characters = await kv.getByPrefix(`character:${user.id}:`);
-    return c.json({ characters: characters.map(c => c.value) });
+    const prefix = `character:${user.id}:`;
+    console.log('Fetching characters with prefix:', prefix);
+    const characters = await kv.getByPrefix(prefix);
+    console.log('Found characters:', characters.length, JSON.stringify(characters));
+    return c.json({ characters: characters });
   } catch (error) {
     console.log('Get characters error:', error);
     return c.json({ error: 'Failed to fetch characters' }, 500);
@@ -65,14 +100,26 @@ app.post('/make-server-9334e2c0/characters', async (c) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (!user || authError) {
+      console.log('Create character - unauthorized:', authError);
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
     const character = await c.req.json();
     const characterId = crypto.randomUUID();
     const characterData = { ...character, id: characterId, userId: user.id };
+    const key = `character:${user.id}:${characterId}`;
     
-    await kv.set(`character:${user.id}:${characterId}`, characterData);
+    console.log('Saving character with key:', key);
+    console.log('Character data:', JSON.stringify(characterData));
+    
+    await kv.set(key, characterData);
+    
+    console.log('Character saved successfully');
+    
+    // Verify it was saved
+    const saved = await kv.get(key);
+    console.log('Verification - retrieved character:', JSON.stringify(saved));
+    
     return c.json({ character: characterData });
   } catch (error) {
     console.log('Create character error:', error);

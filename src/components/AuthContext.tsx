@@ -63,8 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const getAccessToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Error getting session:', error);
+      return null;
+    }
+    if (!session) {
+      console.warn('No active session found');
+      return null;
+    }
+    return session.access_token;
   };
 
   return (

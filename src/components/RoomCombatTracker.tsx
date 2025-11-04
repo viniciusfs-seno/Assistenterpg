@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { CombatantCard } from './CombatantCard';
 import { AddCombatantDialog } from './AddCombatantDialog';
+import { SelectExistingCharacterDialog } from './SelectExistingCharacterDialog';
 import { NPCLibrary } from './NPCLibrary';
 import { DiceRoller } from './DiceRoller';
 import { Button } from './ui/button';
@@ -37,15 +38,22 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const fetchRoom = async () => {
     try {
       const token = await getAccessToken();
-      const { room } = await apiRequest(`/rooms/${roomCode}`, {}, token!);
+      if (!token) {
+        console.error('No access token available');
+        return;
+      }
+      const { room } = await apiRequest(`/rooms/${roomCode}`, {}, token);
       
-      setCombatants(room.combatants || []);
+      // Filter out null/undefined combatants
+      const validCombatants = (room.combatants || []).filter((c: any) => c && c.id);
+      setCombatants(validCombatants);
       setCurrentTurnIndex(room.currentTurnIndex || 0);
       setCombatStarted(room.combatStarted || false);
       setRound(room.round || 1);
       setLoading(false);
     } catch (err) {
       console.error('Failed to fetch room:', err);
+      setLoading(false);
     }
   };
 
@@ -53,10 +61,14 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const updateRoom = async (updates: any) => {
     try {
       const token = await getAccessToken();
+      if (!token) {
+        console.error('No access token available');
+        return;
+      }
       await apiRequest(`/rooms/${roomCode}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
-      }, token!);
+      }, token);
     } catch (err) {
       console.error('Failed to update room:', err);
     }
@@ -216,7 +228,10 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
               <div className="text-slate-400">
                 <p>Você ainda não adicionou seu personagem</p>
               </div>
-              <AddCombatantDialog onAdd={addCombatant} />
+              <div className="flex gap-2 justify-center">
+                <AddCombatantDialog onAdd={addCombatant} />
+                <SelectExistingCharacterDialog onSelect={addCombatant} />
+              </div>
             </div>
           </Card>
         )}
@@ -297,6 +312,7 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2 flex-wrap">
             <AddCombatantDialog onAdd={addCombatant} />
+            <SelectExistingCharacterDialog onSelect={addCombatant} />
             <NPCLibrary onSelectNPC={addCombatant} />
             {!combatStarted ? (
               <Button
