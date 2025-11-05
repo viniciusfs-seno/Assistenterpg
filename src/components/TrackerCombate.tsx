@@ -2,9 +2,12 @@ import { useState } from "react";
 import { CombatantCard } from "./PersonagemCard";
 import { AddCombatantDialog } from "./AddPersonagemDialog";
 import { SelectExistingCharacterDialog } from "./AddPersonagemExistenteDialog";
+import { NPCLibrary } from "./BibliotecaNPC";
+import { DiceRoller } from "./RoladorDados";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Swords, RotateCcw, Play, Pause, Flag } from "lucide-react";
+import { Badge } from "./ui/badge";
+import { Swords, RotateCcw, Play, Flag } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import {
   Dialog,
@@ -13,7 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import { Badge } from "./ui/badge";
+import type { NPCTemplate } from "./BibliotecaNPC";
 
 export interface Combatant {
   id: string;
@@ -23,118 +26,141 @@ export interface Combatant {
   maxHealth: number;
   stamina: number;
   maxStamina: number;
+  cursedEnergy: number;
+  maxCursedEnergy: number;
   isPlayer: boolean;
-  deathSaveCount?: number; // Countdown from 3 when at 0 HP
-  isDeceased?: boolean; // True when death saves reach 0
-  damageTaken?: number; // Total damage taken during combat
-  damageDealt?: number; // Total damage dealt during combat
+  isDeceased?: boolean;
+  deathSaveCount?: number;
+  damageTaken?: number;
+  damageDealt?: number;
+  timesFallen?: number;
+  timesDied?: number;
+  fellOnRound?: number | null;
 }
 
-export function CombatTracker() {
+export interface BattleReport {
+  id: string;
+  timestamp: string;
+  roundEnded: number;
+  combatants: {
+    id: string;
+    name: string;
+    damageTaken: number;
+    damageDealt: number;
+    timesFallen: number;
+    died: boolean;
+    finalHP: number;
+  }[];
+}
+
+const REPORTS_STORAGE_KEY = "battleReports_v1";
+
+export function TrackerCombate() {
   const [combatants, setCombatants] = useState<Combatant[]>([]);
-  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [combatStarted, setCombatStarted] = useState(false);
+  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [round, setRound] = useState(1);
   const [showCombatReport, setShowCombatReport] = useState(false);
+  const [showReportsList, setShowReportsList] = useState(false);
+  const [battleReports, setBattleReports] = useState<BattleReport[]>(() => {
+    try {
+      const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedReport, setSelectedReport] = useState<BattleReport | null>(null);
 
   const sortedCombatants = [...combatants].sort(
-    (a, b) => b.initiative - a.initiative,
+    (a, b) => b.initiative - a.initiative
   );
+  const activeCombatants = sortedCombatants.filter((c) => !c.isDeceased);
 
-  // Filter out deceased combatants for turn order
-  const activeCombatants = sortedCombatants.filter(c => !c.isDeceased);
+  const persistReports = (reports: BattleReport[]) => {
+    setBattleReports(reports);
+    try {
+      localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(reports));
+    } catch (e) {
+      console.error("Failed to persist reports", e);
+    }
+  };
 
   const addCombatant = (combatant: Omit<Combatant, "id">) => {
-    const newCombatant = {
+    const newCombatant: Combatant = {
       ...combatant,
       id: Date.now().toString(),
       damageTaken: 0,
       damageDealt: 0,
       deathSaveCount: 3,
       isDeceased: false,
+      timesFallen: 0,
+      timesDied: 0,
+      fellOnRound: null,
     };
-    setCombatants([...combatants, newCombatant]);
+    setCombatants((prev) => [...prev, newCombatant]);
+  };
+
+  const handleSelectNPC = (npc: Omit<NPCTemplate, "description" | "category">) => {
+    const npcCombatant: Omit<Combatant, "id"> = {
+      name: npc.name,
+      initiative: npc.initiative,
+      health: npc.maxHealth,
+      maxHealth: npc.maxHealth,
+      stamina: npc.maxStamina,
+      maxStamina: npc.maxStamina,
+      cursedEnergy: 0,
+      maxCursedEnergy: 0,
+      isPlayer: false,
+    };
+    addCombatant(npcCombatant);
   };
 
   const removeCombatant = (id: string) => {
-    const index = activeCombatants.findIndex(
-      (c) => c.id === id,
-    );
+    const index = activeCombatants.findIndex((c) => c.id === id);
     if (combatStarted && index < currentTurnIndex) {
-      setCurrentTurnIndex((prev) => Math.max(0, prev - 1));
+      const newIndex = Math.max(0, currentTurnIndex - 1);
+      setCurrentTurnIndex(newIndex);
     }
-    setCombatants(combatants.filter((c) => c.id !== id));
+    setCombatants((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const updateCombatant = (
-    id: string,
-    updates: Partial<Combatant>,
-  ) => {
-    setCombatants(
-      combatants.map((c) => {
+  const updateCombatant = (id: string, updates: Partial<Combatant>) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
         if (c.id !== id) return c;
-        
         const updated = { ...c, ...updates };
-        
-        // Track damage taken
+
         if (updates.health !== undefined && updates.health < c.health) {
           const damageTaken = c.health - updates.health;
           updated.damageTaken = (c.damageTaken || 0) + damageTaken;
         }
-        
-        // When health drops to 0, initialize death saves
+
         if (updated.health === 0 && c.health > 0 && !updated.isDeceased) {
           updated.deathSaveCount = 3;
+          updated.timesFallen = (c.timesFallen || 0) + 1;
+          updated.fellOnRound = round;
         }
-        
-        // When health goes above 0, clear death saves
+
         if (updated.health > 0) {
           updated.deathSaveCount = undefined;
           updated.isDeceased = false;
+          updated.fellOnRound = null;
         }
-        
+
         return updated;
-      }),
+      })
     );
   };
 
   const reviveCombatant = (id: string) => {
-    setCombatants(
-      combatants.map((c) =>
+    setCombatants((prev) =>
+      prev.map((c) =>
         c.id === id
-          ? { 
-              ...c, 
-              health: 1, 
-              deathSaveCount: undefined, 
-              isDeceased: false 
-            }
-          : c,
-      ),
+          ? { ...c, health: 1, isDeceased: false, deathSaveCount: undefined, fellOnRound: null }
+          : c
+      )
     );
-  };
-
-  const nextTurn = () => {
-    if (activeCombatants.length === 0) return;
-
-    // Process death saves for defeated combatants
-    setCombatants(combatants.map(c => {
-      if (c.health === 0 && !c.isDeceased && c.deathSaveCount !== undefined) {
-        const newCount = c.deathSaveCount - 1;
-        if (newCount <= 0) {
-          return { ...c, deathSaveCount: 0, isDeceased: true };
-        }
-        return { ...c, deathSaveCount: newCount };
-      }
-      return c;
-    }));
-
-    const nextIndex = currentTurnIndex + 1;
-    if (nextIndex >= activeCombatants.length) {
-      setCurrentTurnIndex(0);
-      setRound(round + 1);
-    } else {
-      setCurrentTurnIndex(nextIndex);
-    }
   };
 
   const startCombat = () => {
@@ -145,26 +171,84 @@ export function CombatTracker() {
     }
   };
 
-  const resetCombat = () => {
-    setCombatStarted(false);
-    setCurrentTurnIndex(0);
-    setRound(1);
-    // Reset all health and stamina to max
-    setCombatants(
-      combatants.map((c) => ({
-        ...c,
-        health: c.maxHealth,
-        stamina: c.maxStamina,
-        deathSaveCount: 3,
-        isDeceased: false,
-        damageTaken: 0,
-        damageDealt: 0,
+  const generateReportAndPersist = (endRound: number) => {
+    const report: BattleReport = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      roundEnded: endRound,
+      combatants: combatants.map((c) => ({
+        id: c.id,
+        name: c.name,
+        damageTaken: c.damageTaken || 0,
+        damageDealt: c.damageDealt || 0,
+        timesFallen: c.timesFallen || 0,
+        died: !!c.isDeceased,
+        finalHP: c.health,
       })),
-    );
+    };
+    const newReports = [...battleReports, report];
+    persistReports(newReports);
+    return report;
   };
 
   const endCombat = () => {
+    generateReportAndPersist(round);
     setShowCombatReport(true);
+    setCombatStarted(false);
+    setCurrentTurnIndex(0);
+  };
+
+  const nextTurn = () => {
+    if (activeCombatants.length === 0) return;
+
+    const currentCombatant = activeCombatants[currentTurnIndex];
+
+    const updatedCombatants = combatants.map((c) => {
+      if (
+        c.id === currentCombatant.id &&
+        c.health === 0 &&
+        !c.isDeceased &&
+        c.deathSaveCount !== undefined
+      ) {
+        if (c.fellOnRound === round) return c;
+        const newCount = c.deathSaveCount - 1;
+        if (newCount <= 0) {
+          return { ...c, deathSaveCount: 0, isDeceased: true, timesDied: (c.timesDied || 0) + 1 };
+        }
+        return { ...c, deathSaveCount: newCount };
+      }
+      return c;
+    });
+
+    setCombatants(updatedCombatants);
+
+    const nextIndex = currentTurnIndex + 1;
+    if (nextIndex >= activeCombatants.length) {
+      setCurrentTurnIndex(0);
+      setRound((prev) => prev + 1);
+    } else {
+      setCurrentTurnIndex(nextIndex);
+    }
+  };
+
+  const resetCombat = () => {
+    const resetCombatants = combatants.map((c) => ({
+      ...c,
+      health: c.maxHealth,
+      stamina: c.maxStamina,
+      cursedEnergy: c.maxCursedEnergy ?? c.cursedEnergy ?? 0,
+      deathSaveCount: 3,
+      isDeceased: false,
+      damageTaken: 0,
+      damageDealt: 0,
+      timesFallen: 0,
+      timesDied: 0,
+      fellOnRound: null,
+    }));
+    setCombatants(resetCombatants);
+    setCombatStarted(false);
+    setCurrentTurnIndex(0);
+    setRound(1);
   };
 
   const clearAll = () => {
@@ -176,12 +260,12 @@ export function CombatTracker() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Controls */}
       <Card className="p-4 bg-slate-800/50 border-slate-700">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2">
             <AddCombatantDialog onAdd={addCombatant} />
             <SelectExistingCharacterDialog onSelect={addCombatant} />
+            <NPCLibrary onSelectNPC={handleSelectNPC} />
             {!combatStarted ? (
               <Button
                 onClick={startCombat}
@@ -192,15 +276,13 @@ export function CombatTracker() {
                 Iniciar Combate
               </Button>
             ) : (
-              <Button
-                onClick={nextTurn}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
+              <Button onClick={nextTurn} className="bg-blue-600 hover:bg-blue-700">
                 <Swords className="w-4 h-4 mr-2" />
-                Next Turn
+                Próximo Turno
               </Button>
             )}
           </div>
+
           <div className="flex gap-2">
             {combatStarted && (
               <>
@@ -210,8 +292,9 @@ export function CombatTracker() {
                   className="border-red-600 text-red-400 hover:bg-red-900/20"
                 >
                   <Flag className="w-4 h-4 mr-2" />
-                  Finalizar Combate
+                  Encerrar Combate
                 </Button>
+
                 <Button
                   onClick={resetCombat}
                   variant="outline"
@@ -222,6 +305,13 @@ export function CombatTracker() {
                 </Button>
               </>
             )}
+            <Button
+              onClick={() => setShowReportsList(true)}
+              variant="outline"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              📜 Ver Relatórios de Combate
+            </Button>
             <Button
               onClick={clearAll}
               variant="outline"
@@ -234,7 +324,6 @@ export function CombatTracker() {
         </div>
       </Card>
 
-      {/* Round Counter */}
       {combatStarted && (
         <Alert className="bg-slate-800/50 border-slate-700">
           <AlertDescription className="text-center text-white">
@@ -243,118 +332,184 @@ export function CombatTracker() {
         </Alert>
       )}
 
-      {/* Combatants List */}
       {sortedCombatants.length === 0 ? (
         <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
           <div className="text-center text-slate-500">
             <Swords className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhum personagem adicionado</p>
-            <p className="text-sm mt-2">
-              Clique em "Adicionar Personagem" para começar
-            </p>
           </div>
         </Card>
       ) : (
         <div className="space-y-3">
-          {sortedCombatants.map((combatant) => {
-            const activeIndex = activeCombatants.findIndex(c => c.id === combatant.id);
-            return (
-              <CombatantCard
-                key={combatant.id}
-                combatant={combatant}
-                isCurrentTurn={
-                  combatStarted && activeIndex === currentTurnIndex
-                }
-                onUpdate={updateCombatant}
-                onRemove={removeCombatant}
-                onRevive={reviveCombatant}
-              />
-            );
-          })}
+          {sortedCombatants.map((combatant, index) => (
+            <CombatantCard
+              key={combatant.id}
+              combatant={combatant}
+              isCurrentTurn={combatStarted && index === currentTurnIndex}
+              onUpdate={updateCombatant}
+              onRemove={removeCombatant}
+              onRevive={reviveCombatant}
+              isDM={true}
+            />
+          ))}
         </div>
       )}
 
-      {/* Combat Report Dialog */}
+      {/* Relatório do combate atual */}
       <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
             <DialogDescription className="text-slate-400">
               Round {round} completado
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6">
-            {/* Summary */}
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="p-4 bg-slate-700/50 border-slate-600">
-                <div className="text-sm text-slate-400">Total de Rounds</div>
-                <div className="text-2xl text-white">{round}</div>
-              </Card>
-              <Card className="p-4 bg-slate-700/50 border-slate-600">
-                <div className="text-sm text-slate-400">Combatentes</div>
-                <div className="text-2xl text-white">{sortedCombatants.length}</div>
-              </Card>
-            </div>
 
-            {/* Damage Statistics */}
-            <div>
-              <h3 className="text-lg mb-3">Estatísticas de Dano</h3>
-              <div className="space-y-2">
-                {sortedCombatants.map((combatant) => (
-                  <Card key={combatant.id} className="p-4 bg-slate-700/50 border-slate-600">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white">{combatant.name}</span>
-                        <Badge
-                          variant={combatant.isPlayer ? "default" : "secondary"}
-                          className={combatant.isPlayer ? "bg-blue-600" : "bg-red-600"}
-                        >
-                          {combatant.isPlayer ? "Player" : "Enemy"}
-                        </Badge>
-                        {combatant.isDeceased && (
-                          <Badge variant="destructive">Morto</Badge>
-                        )}
-                        {combatant.health === 0 && !combatant.isDeceased && (
-                          <Badge className="bg-orange-600">Derrotado</Badge>
-                        )}
+          <div className="space-y-4 p-4">
+            {combatants.map((c) => (
+              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-white font-medium">{c.name}</div>
+                    <div className="text-xs text-slate-400">
+                      Final HP: {c.health}/{c.maxHealth}
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                    {c.isDeceased && <div className="text-red-400">Morto</div>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 p-4">
+            <Button
+              onClick={() => {
+                setShowCombatReport(false);
+                setCombatStarted(false);
+                setCurrentTurnIndex(0);
+                setRound(1);
+              }}
+              className="bg-green-700 hover:bg-green-600"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lista de relatórios */}
+      <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Relatórios Salvos</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Relatórios de combates anteriores
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-4 space-y-3">
+            {battleReports.length === 0 ? (
+              <div className="text-slate-400">Nenhum relatório salvo.</div>
+            ) : (
+              battleReports.map((r) => (
+                <Card key={r.id} className="p-3 bg-slate-700/50 border-slate-600">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-white font-medium">
+                        {new Date(r.timestamp).toLocaleString()}
                       </div>
-                      <div className="text-sm text-slate-400">
-                        HP Final: {combatant.health}/{combatant.maxHealth}
+                      <div className="text-xs text-slate-400">
+                        Rounds: {r.roundEnded}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-slate-400">Dano Recebido: </span>
-                        <span className="text-red-400">{combatant.damageTaken || 0}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Dano Causado: </span>
-                        <span className="text-green-400">{combatant.damageDealt || 0}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedReport(r)}
+                      >
+                        Ver
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          const filtered = battleReports.filter(
+                            (br) => br.id !== r.id
+                          );
+                          persistReports(filtered);
+                        }}
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+
+          <div className="p-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => persistReports([])}
+              className="border-slate-600"
+            >
+              Limpar todos
+            </Button>
+            <Button
+              onClick={() => setShowReportsList(false)}
+              className="bg-green-700 hover:bg-green-600"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de relatório detalhado */}
+      <Dialog open={!!selectedReport} onOpenChange={() => setSelectedReport(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Relatório de Combate</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {selectedReport
+                ? new Date(selectedReport.timestamp).toLocaleString()
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReport && (
+            <div className="space-y-4 p-4">
+              {selectedReport.combatants.map((c) => (
+                <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-white font-medium">{c.name}</div>
+                      <div className="text-xs text-slate-400">
+                        HP final: {c.finalHP}
                       </div>
                     </div>
-                  </Card>
-                ))}
-              </div>
+                    <div className="text-sm text-slate-300">
+                      Dano: {c.damageTaken} | Quedas: {c.timesFallen}
+                      {c.died && <div className="text-red-400">Morto</div>}
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
+          )}
 
-            {/* Victory/Defeat Status */}
-            <div>
-              <h3 className="text-lg mb-3">Status Final</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="p-4 bg-blue-900/30 border-blue-700">
-                  <div className="text-sm text-slate-400 mb-1">Players Vivos</div>
-                  <div className="text-2xl text-white">
-                    {sortedCombatants.filter(c => c.isPlayer && c.health > 0).length} / {sortedCombatants.filter(c => c.isPlayer).length}
-                  </div>
-                </Card>
-                <Card className="p-4 bg-red-900/30 border-red-700">
-                  <div className="text-sm text-slate-400 mb-1">Inimigos Vivos</div>
-                  <div className="text-2xl text-white">
-                    {sortedCombatants.filter(c => !c.isPlayer && c.health > 0).length} / {sortedCombatants.filter(c => !c.isPlayer).length}
-                  </div>
-                </Card>
-              </div>
-            </div>
+          <div className="flex justify-end p-4">
+            <Button
+              onClick={() => setSelectedReport(null)}
+              className="bg-green-700 hover:bg-green-600"
+            >
+              Fechar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

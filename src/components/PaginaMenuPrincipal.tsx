@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { RoomManager } from './GerenciadorSala';
 import { CharacterManager } from './GerenciadorPersonagem';
-import { CombatTracker } from './TrackerCombate';
+import { TrackerCombate } from './TrackerCombate';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Sword, LogOut, Users, Home, Swords } from 'lucide-react';
@@ -80,7 +80,7 @@ export function MainMenu({ onJoinRoom }: MainMenuProps) {
                   </p>
                 </div>
               </Card>
-              <CombatTracker />
+              <TrackerCombate />
             </TabsContent>
           </Tabs>
         </div>

@@ -8,10 +8,19 @@ import { DiceRoller } from './RoladorDados';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Swords, RotateCcw, Play, ArrowLeft, Users, Crown, Flag } from 'lucide-react';
+import {
+  Swords,
+  RotateCcw,
+  Play,
+  ArrowLeft,
+  Users,
+  Crown,
+  Flag
+} from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { apiRequest } from '../utils/api';
 import type { Combatant } from './TrackerCombate';
+import type { NPCTemplate } from './BibliotecaNPC';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +35,8 @@ interface RoomCombatTrackerProps {
   onLeaveRoom: () => void;
 }
 
+const REPORTS_STORAGE_KEY = "battleReports_v1";
+
 export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTrackerProps) {
   const { getAccessToken, user } = useAuth();
   const [combatants, setCombatants] = useState<Combatant[]>([]);
@@ -34,13 +45,22 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const [round, setRound] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showCombatReport, setShowCombatReport] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showReportsList, setShowReportsList] = useState(false);
+  const [battleReports, setBattleReports] = useState<any[]>(
+    () => {
+      try {
+        const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+  );
 
   const sortedCombatants = [...combatants].sort((a, b) => b.initiative - a.initiative);
-  
-  // Filter out deceased combatants for turn order
-  const activeCombatants = sortedCombatants.filter(c => !c.isDeceased);
+  const activeCombatants = sortedCombatants.filter((c) => !c.isDeceased);
 
-  // Player's own combatant
   const playerCombatant = sortedCombatants.find(
     c => c.isPlayer && c.id.startsWith(`player_${user?.id}`)
   );
@@ -49,13 +69,9 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const fetchRoom = async () => {
     try {
       const token = await getAccessToken();
-      if (!token) {
-        console.error('No access token available');
-        return;
-      }
+      if (!token) return;
       const { room } = await apiRequest(`/rooms/${roomCode}`, {}, token);
       
-      // Filter out null/undefined combatants
       const validCombatants = (room.combatants || []).filter((c: any) => c && c.id);
       setCombatants(validCombatants);
       setCurrentTurnIndex(room.currentTurnIndex || 0);
@@ -68,29 +84,29 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
     }
   };
 
-  // Update room data
   const updateRoom = async (updates: any) => {
     try {
+      setIsSyncing(true);
       const token = await getAccessToken();
-      if (!token) {
-        console.error('No access token available');
-        return;
-      }
+      if (!token) return;
       await apiRequest(`/rooms/${roomCode}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
       }, token);
     } catch (err) {
       console.error('Failed to update room:', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  // Polling for real-time updates
   useEffect(() => {
     fetchRoom();
-    const interval = setInterval(fetchRoom, 2000); // Poll every 2 seconds
+    const interval = setInterval(() => {
+      if (!isSyncing) fetchRoom();
+    }, 2000);
     return () => clearInterval(interval);
-  }, [roomCode]);
+  }, [roomCode, isSyncing]);
 
   const addCombatant = async (combatant: Omit<Combatant, 'id'>) => {
     const newCombatant = {
@@ -100,51 +116,65 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
       damageDealt: 0,
       deathSaveCount: 3,
       isDeceased: false,
+      timesFallen: 0,
+      timesDied: 0,
+      fellOnRound: null,
     };
     const updatedCombatants = [...combatants, newCombatant];
     setCombatants(updatedCombatants);
     await updateRoom({ combatants: updatedCombatants });
   };
 
+  const handleSelectNPC = (npc: Omit<NPCTemplate, 'description' | 'category'>) => {
+    const npcCombatant = {
+      name: npc.name,
+      initiative: npc.initiative || 0,
+      health: npc.maxHealth,
+      maxHealth: npc.maxHealth,
+      stamina: npc.maxStamina,
+      maxStamina: npc.maxStamina,
+      cursedEnergy: 0,
+      maxCursedEnergy: 0,
+      isPlayer: false,
+    };
+    addCombatant(npcCombatant);
+  };
+
   const removeCombatant = async (id: string) => {
     const index = activeCombatants.findIndex(c => c.id === id);
+    const newList = combatants.filter(c => c.id !== id);
     if (combatStarted && index < currentTurnIndex) {
       const newIndex = Math.max(0, currentTurnIndex - 1);
       setCurrentTurnIndex(newIndex);
-      await updateRoom({
-        combatants: combatants.filter(c => c.id !== id),
-        currentTurnIndex: newIndex,
-      });
+      await updateRoom({ combatants: newList, currentTurnIndex: newIndex });
     } else {
-      await updateRoom({
-        combatants: combatants.filter(c => c.id !== id),
-      });
+      await updateRoom({ combatants: newList });
     }
+    setCombatants(newList);
   };
 
   const updateCombatant = async (id: string, updates: Partial<Combatant>) => {
     const updatedCombatants = combatants.map(c => {
       if (c.id !== id) return c;
-      
       const updated = { ...c, ...updates };
-      
-      // Track damage taken
+
       if (updates.health !== undefined && updates.health < c.health) {
         const damageTaken = c.health - updates.health;
         updated.damageTaken = (c.damageTaken || 0) + damageTaken;
       }
-      
-      // When health drops to 0, initialize death saves
+
       if (updated.health === 0 && c.health > 0 && !updated.isDeceased) {
         updated.deathSaveCount = 3;
+        updated.timesFallen = (c.timesFallen || 0) + 1;
+        updated.fellOnRound = round;
       }
-      
-      // When health goes above 0, clear death saves
+
       if (updated.health > 0) {
         updated.deathSaveCount = undefined;
         updated.isDeceased = false;
+        updated.fellOnRound = null;
       }
-      
+
       return updated;
     });
     setCombatants(updatedCombatants);
@@ -154,48 +184,88 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
   const reviveCombatant = async (id: string) => {
     const updatedCombatants = combatants.map(c =>
       c.id === id
-        ? { 
-            ...c, 
-            health: 1, 
-            deathSaveCount: undefined, 
-            isDeceased: false 
-          }
+        ? { ...c, health: 1, deathSaveCount: undefined, isDeceased: false, fellOnRound: null }
         : c
     );
     setCombatants(updatedCombatants);
     await updateRoom({ combatants: updatedCombatants });
   };
 
+  const persistReports = (reports: any[]) => {
+    setBattleReports(reports);
+    try {
+      localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(reports));
+    } catch (e) {
+      console.error("Failed to persist reports", e);
+    }
+  };
+
+  const generateReportAndPersist = async (endRound: number) => {
+    const report = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      roundEnded: endRound,
+      combatants: combatants.map((c) => ({
+        id: c.id,
+        name: c.name,
+        damageTaken: c.damageTaken || 0,
+        damageDealt: c.damageDealt || 0,
+        timesFallen: c.timesFallen || 0,
+        died: !!c.isDeceased,
+        finalHP: c.health,
+      })),
+    };
+    const newReports = [...battleReports, report];
+    persistReports(newReports);
+    return report;
+  };
+
+  const endCombat = async () => {
+    await generateReportAndPersist(round);
+    setCombatStarted(false);
+    setCurrentTurnIndex(0);
+    setShowCombatReport(true);
+  };
+
   const nextTurn = async () => {
     if (activeCombatants.length === 0) return;
 
-    // Process death saves for defeated combatants
+    const currentCombatant = activeCombatants[currentTurnIndex];
+
     const updatedWithDeathSaves = combatants.map(c => {
-      if (c.health === 0 && !c.isDeceased && c.deathSaveCount !== undefined) {
+      if (
+        c.id === currentCombatant.id &&
+        c.health === 0 &&
+        !c.isDeceased &&
+        c.deathSaveCount !== undefined
+      ) {
+        if (c.fellOnRound === round) {
+          return c;
+        }
         const newCount = c.deathSaveCount - 1;
         if (newCount <= 0) {
-          return { ...c, deathSaveCount: 0, isDeceased: true };
+          return { ...c, deathSaveCount: 0, isDeceased: true, timesDied: (c.timesDied || 0) + 1 };
         }
         return { ...c, deathSaveCount: newCount };
       }
       return c;
     });
     setCombatants(updatedWithDeathSaves);
-    
+
     const nextIndex = currentTurnIndex + 1;
     if (nextIndex >= activeCombatants.length) {
       setCurrentTurnIndex(0);
       setRound(round + 1);
-      await updateRoom({ 
+      await updateRoom({
         combatants: updatedWithDeathSaves,
-        currentTurnIndex: 0, 
-        round: round + 1 
+        currentTurnIndex: 0,
+        round: round + 1,
       });
     } else {
       setCurrentTurnIndex(nextIndex);
-      await updateRoom({ 
+      await updateRoom({
         combatants: updatedWithDeathSaves,
-        currentTurnIndex: nextIndex 
+        currentTurnIndex: nextIndex,
       });
     }
   };
@@ -214,10 +284,14 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
       ...c,
       health: c.maxHealth,
       stamina: c.maxStamina,
+      cursedEnergy: c.maxCursedEnergy ?? c.cursedEnergy ?? 0,
       deathSaveCount: 3,
       isDeceased: false,
       damageTaken: 0,
       damageDealt: 0,
+      timesFallen: 0,
+      timesDied: 0,
+      fellOnRound: null,
     }));
     setCombatStarted(false);
     setCurrentTurnIndex(0);
@@ -229,10 +303,6 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
       currentTurnIndex: 0,
       round: 1,
     });
-  };
-
-  const endCombat = () => {
-    setShowCombatReport(true);
   };
 
   const clearAll = async () => {
@@ -258,11 +328,10 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
     );
   }
 
-  // Player view - only see their own character
+  // Player view - show player's own combatant and initiative list; allow player to edit own stats
   if (!isDM) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
         <Card className="p-4 bg-slate-800/50 border-slate-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -288,10 +357,8 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
           </div>
         </Card>
 
-        {/* Dice Roller */}
         <DiceRoller />
 
-        {/* Round Counter */}
         {combatStarted && (
           <Alert className="bg-slate-800/50 border-slate-700">
             <AlertDescription className="text-center text-white">
@@ -300,7 +367,6 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
           </Alert>
         )}
 
-        {/* Add Character */}
         {!playerCombatant && (
           <Card className="p-6 bg-slate-800/50 border-slate-700">
             <div className="text-center space-y-4">
@@ -315,7 +381,6 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
           </Card>
         )}
 
-        {/* Player's Character */}
         {playerCombatant && (
           <div>
             <h3 className="text-slate-300 mb-3">Seu Personagem</h3>
@@ -327,42 +392,44 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
               }
               onUpdate={updateCombatant}
               onRemove={removeCombatant}
+              isDM={false}
+              isOwner={true} // allow editing of own stats
             />
-          </div>
-        )}
 
-        {/* Turn Order (names only) */}
-        {combatStarted && sortedCombatants.length > 0 && (
-          <Card className="p-4 bg-slate-800/50 border-slate-700">
-            <h3 className="text-slate-300 mb-3">Ordem de Iniciativa</h3>
-            <div className="space-y-2">
-              {sortedCombatants.map((c, idx) => (
-                <div
-                  key={c.id}
-                  className={`flex items-center gap-2 p-2 rounded ${
-                    idx === currentTurnIndex
-                      ? 'bg-blue-600/30 border border-blue-500'
-                      : 'bg-slate-700/50'
-                  }`}
-                >
-                  <span className="text-slate-400 text-sm w-6">{idx + 1}.</span>
-                  <span className="text-white">{c.name}</span>
-                  {idx === currentTurnIndex && (
-                    <Badge className="ml-auto bg-yellow-600">Turno Atual</Badge>
-                  )}
+            {/* Initiative order list (names + status) */}
+            {combatStarted && sortedCombatants.length > 0 && (
+              <Card className="p-4 bg-slate-800/50 border-slate-700 mt-4">
+                <h4 className="text-slate-300 mb-2">Ordem de Iniciativa</h4>
+                <div className="space-y-2">
+                  {sortedCombatants.map((c, idx) => (
+                    <div key={c.id} className="flex items-center justify-between p-2 rounded bg-slate-700/50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-300 text-sm">{idx + 1}.</span>
+                        <span className="text-white">{c.name}</span>
+                      </div>
+                      <div>
+                        {c.isDeceased ? (
+                          <Badge className="bg-red-600">Morto</Badge>
+                        ) : c.health === 0 ? (
+                          <Badge className="bg-orange-600">Caído</Badge>
+                        ) : (
+                          <Badge className="bg-green-600">Vivo</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </Card>
+              </Card>
+            )}
+          </div>
         )}
       </div>
     );
   }
 
-  // DM view - see everything
+  // DM view
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
       <Card className="p-4 bg-slate-800/50 border-slate-700">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -375,14 +442,12 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
               <ArrowLeft className="w-4 h-4 mr-2" />
               Sair
             </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-purple-600">
-                  <Crown className="w-3 h-3 mr-1" />
-                  Mestre
-                </Badge>
-                <span className="text-slate-400">Sala: {roomCode}</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-purple-600">
+                <Crown className="w-3 h-3 mr-1" />
+                Mestre
+              </Badge>
+              <span className="text-slate-400">Sala: {roomCode}</span>
             </div>
           </div>
         </div>
@@ -392,7 +457,7 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
           <div className="flex gap-2 flex-wrap">
             <AddCombatantDialog onAdd={addCombatant} />
             <SelectExistingCharacterDialog onSelect={addCombatant} />
-            <NPCLibrary onSelectNPC={addCombatant} />
+            <NPCLibrary onSelectNPC={handleSelectNPC} />
             {!combatStarted ? (
               <Button
                 onClick={startCombat}
@@ -409,17 +474,39 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
               </Button>
             )}
           </div>
+
+          {/* Buttons */}
           <div className="flex gap-2">
             {combatStarted && (
-              <Button
-                onClick={resetCombat}
-                variant="outline"
-                className="border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Reset
-              </Button>
+              <>
+                <Button
+                  onClick={endCombat}
+                  variant="outline"
+                  className="border-red-600 text-red-400 hover:bg-red-900/20"
+                >
+                  <Flag className="w-4 h-4 mr-2" />
+                  Encerrar Combate
+                </Button>
+
+                <Button
+                  onClick={resetCombat}
+                  variant="outline"
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reset
+                </Button>
+              </>
             )}
+
+            <Button
+              onClick={() => setShowReportsList(true)}
+              variant="outline"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              📜 Ver Relatórios de Combate
+            </Button>
+
             <Button
               onClick={clearAll}
               variant="outline"
@@ -432,10 +519,8 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
         </div>
       </Card>
 
-      {/* Dice Roller */}
       <DiceRoller />
 
-      {/* Round Counter */}
       {combatStarted && (
         <Alert className="bg-slate-800/50 border-slate-700">
           <AlertDescription className="text-center text-white">
@@ -444,15 +529,12 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
         </Alert>
       )}
 
-      {/* Combatants List */}
       {sortedCombatants.length === 0 ? (
         <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
           <div className="text-center text-slate-500">
             <Swords className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhum personagem adicionado</p>
-            <p className="text-sm mt-2">
-              Adicione personagens ou NPCs para começar
-            </p>
+            <p className="text-sm mt-2">Adicione personagens ou NPCs para começar</p>
           </div>
         </Card>
       ) : (
@@ -464,10 +546,126 @@ export function RoomCombatTracker({ roomCode, isDM, onLeaveRoom }: RoomCombatTra
               isCurrentTurn={combatStarted && index === currentTurnIndex}
               onUpdate={updateCombatant}
               onRemove={removeCombatant}
+              onRevive={reviveCombatant}
+              isDM={isDM}
             />
           ))}
         </div>
       )}
+
+      {/* Current Combat Report */}
+      <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
+            <DialogDescription className="text-slate-400">Round {round} completado</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 p-4">
+            {combatants.map((c) => (
+              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-white font-medium">{c.name}</div>
+                    <div className="text-xs text-slate-400">
+                      Final HP: {c.health}/{c.maxHealth}
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                    {c.isDeceased && <div className="text-red-400">Morto</div>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 p-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowCombatReport(false)}
+              className="border-slate-600"
+            >
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCombatReport(false);
+                resetCombat();
+              }}
+              className="bg-green-700 hover:bg-green-600"
+            >
+              Novo Combate
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reports list dialog */}
+      <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Relatórios Salvos</DialogTitle>
+            <DialogDescription className="text-slate-400">Relatórios de combates anteriores (localStorage)</DialogDescription>
+          </DialogHeader>
+
+          <div className="p-4 space-y-3">
+            {battleReports.length === 0 ? (
+              <div className="text-slate-400">Nenhum relatório salvo.</div>
+            ) : (
+              battleReports.map((r: any) => (
+                <Card key={r.id} className="p-3 bg-slate-700/50 border-slate-600">
+                  <div className="flex justify-between">
+                    <div>
+                      <div className="text-white font-medium">{new Date(r.timestamp).toLocaleString()}</div>
+                      <div className="text-xs text-slate-400">Rounds: {r.roundEnded}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const details = r.combatants.map((c: any) =>
+                            `${c.name} — Dano: ${c.damageTaken}, Quedas: ${c.timesFallen}, Morto: ${c.died ? "Sim" : "Não"}`
+                          ).join("\n");
+                          alert(`Relatório (${new Date(r.timestamp).toLocaleString()}):\n\n${details}`);
+                        }}
+                      >
+                        Ver
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          const filtered = battleReports.filter((br) => br.id !== r.id);
+                          persistReports(filtered);
+                        }}
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+
+          <div className="p-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                persistReports([]);
+              }}
+              className="border-slate-600"
+            >
+              Limpar todos
+            </Button>
+            <Button onClick={() => setShowReportsList(false)} className="bg-green-700 hover:bg-green-600">
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
