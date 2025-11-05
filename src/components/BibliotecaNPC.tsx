@@ -91,7 +91,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => {
+      <Dialog open={open} onOpenChange={(isOpen: boolean | ((prevState: boolean) => boolean)) => {
         setOpen(isOpen);
         if (!isOpen) {
           setSelectedNPC(null);
@@ -153,7 +153,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
       </Dialog>
 
       {/* Initiative Input Dialog */}
-      <Dialog open={!!selectedNPC} onOpenChange={(isOpen) => !isOpen && handleCancel()}>
+      <Dialog open={!!selectedNPC} onOpenChange={(isOpen: any) => !isOpen && handleCancel()}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle>Definir Iniciativa</DialogTitle>
@@ -202,5 +202,3 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
     </>
   );
 }
-
-export { NPCTemplate };
