@@ -12,7 +12,7 @@ interface RoomManagerProps {
   onJoinRoom: (roomCode: string, isDM: boolean) => void;
 }
 
-export function RoomManager({ onJoinRoom }: RoomManagerProps) {
+export function GerenciadorSala({ onJoinRoom }: RoomManagerProps) {
   const { getAccessToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

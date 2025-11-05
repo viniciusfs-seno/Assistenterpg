@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Sword, LogIn, UserPlus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
-export function LoginPage() {
+export function PaginaLogin() {
   const { signIn, signUp } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

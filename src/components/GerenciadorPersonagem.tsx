@@ -4,13 +4,13 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
-import { Users, Trash2, Heart, Zap } from 'lucide-react';
+import { Users, Trash2, Heart, Zap, Sparkles, Brain } from 'lucide-react';
 import { AddCombatantDialog } from './AddPersonagemDialog';
 import { DebugCharacters } from './DebugPersonagens';
 import { apiRequest } from '../utils/api';
 import type { Combatant } from './TrackerCombate';
 
-export function CharacterManager() {
+export function GerenciadorPersonagem() {
   const { getAccessToken } = useAuth();
   const [characters, setCharacters] = useState<Combatant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +171,14 @@ export function CharacterManager() {
                   <div className="flex items-center gap-2 text-slate-300">
                     <Zap className="w-4 h-4 text-yellow-400" />
                     <span>Esforço: {character.maxStamina}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <span>Energia: {character.maxCursedEnergy ?? 0}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Brain className="w-4 h-4 text-cyan-400" />
+                    <span>Sanidade: {character.maxSanity ?? 100}</span>
                   </div>
                 </div>
               </div>

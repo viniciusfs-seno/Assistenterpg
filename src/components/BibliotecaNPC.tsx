@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { BookOpen, Plus } from 'lucide-react';
 import { npcTemplates, NPCTemplate } from '../data/npc-templates';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -14,15 +16,31 @@ interface NPCLibraryProps {
 
 export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
   const [open, setOpen] = useState(false);
+  const [selectedNPC, setSelectedNPC] = useState<NPCTemplate | null>(null);
+  const [initiativeInput, setInitiativeInput] = useState('');
 
   const handleSelect = (npc: NPCTemplate) => {
+    setSelectedNPC(npc);
+    setInitiativeInput(npc.initiative.toString()); // Use template initiative as default suggestion
+  };
+
+  const handleConfirm = () => {
+    if (!selectedNPC) return;
+    
     onSelectNPC({
-      name: npc.name,
-      initiative: npc.initiative,
-      maxHealth: npc.maxHealth,
-      maxStamina: npc.maxStamina,
+      name: selectedNPC.name,
+      initiative: parseInt(initiativeInput) || 10,
+      maxHealth: selectedNPC.maxHealth,
+      maxStamina: selectedNPC.maxStamina,
     });
     setOpen(false);
+    setSelectedNPC(null);
+    setInitiativeInput('');
+  };
+
+  const handleCancel = () => {
+    setSelectedNPC(null);
+    setInitiativeInput('');
   };
 
   const commonNPCs = npcTemplates.filter(npc => npc.category === 'common');
@@ -50,10 +68,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
           </Badge>
         </div>
         
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <div className="text-slate-300">
-            <span className="text-slate-500">Init:</span> {npc.initiative}
-          </div>
+        <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="text-slate-300">
             <span className="text-slate-500">Vida:</span> {npc.maxHealth}
           </div>
@@ -68,66 +83,124 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
           className="w-full bg-purple-600 hover:bg-purple-700"
         >
           <Plus className="w-4 h-4 mr-1" />
-          Adicionar
+          Selecionar
         </Button>
       </div>
     </Card>
   );
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-          <BookOpen className="w-4 h-4 mr-2" />
-          Biblioteca de NPCs
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle>Biblioteca de NPCs</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Selecione um NPC pré-configurado para adicionar ao combate
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+          setSelectedNPC(null);
+          setInitiativeInput('');
+        }
+      }}>
+        <DialogTrigger asChild>
+          <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+            <BookOpen className="w-4 h-4 mr-2" />
+            Biblioteca de NPCs
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Biblioteca de NPCs</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Selecione um NPC pré-configurado para adicionar ao combate
+            </DialogDescription>
+          </DialogHeader>
 
-        <Tabs defaultValue="common" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="common">Comuns</TabsTrigger>
-            <TabsTrigger value="elite">Elite</TabsTrigger>
-            <TabsTrigger value="boss">Boss</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="common" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="common">Comuns</TabsTrigger>
+              <TabsTrigger value="elite">Elite</TabsTrigger>
+              <TabsTrigger value="boss">Boss</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="common">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="grid gap-3">
-                {commonNPCs.map((npc, idx) => (
-                  <NPCCard key={idx} npc={npc} />
-                ))}
-              </div>
-            </ScrollArea>
-          </TabsContent>
+            <TabsContent value="common">
+              <ScrollArea className="h-[400px] pr-4">
+                <div className="grid gap-3">
+                  {commonNPCs.map((npc, idx) => (
+                    <NPCCard key={idx} npc={npc} />
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
 
-          <TabsContent value="elite">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="grid gap-3">
-                {eliteNPCs.map((npc, idx) => (
-                  <NPCCard key={idx} npc={npc} />
-                ))}
-              </div>
-            </ScrollArea>
-          </TabsContent>
+            <TabsContent value="elite">
+              <ScrollArea className="h-[400px] pr-4">
+                <div className="grid gap-3">
+                  {eliteNPCs.map((npc, idx) => (
+                    <NPCCard key={idx} npc={npc} />
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
 
-          <TabsContent value="boss">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="grid gap-3">
-                {bossNPCs.map((npc, idx) => (
-                  <NPCCard key={idx} npc={npc} />
-                ))}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+            <TabsContent value="boss">
+              <ScrollArea className="h-[400px] pr-4">
+                <div className="grid gap-3">
+                  {bossNPCs.map((npc, idx) => (
+                    <NPCCard key={idx} npc={npc} />
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Initiative Input Dialog */}
+      <Dialog open={!!selectedNPC} onOpenChange={(isOpen) => !isOpen && handleCancel()}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Definir Iniciativa</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Informe o valor de iniciativa para {selectedNPC?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="initiative">Iniciativa</Label>
+              <Input
+                id="initiative"
+                type="number"
+                value={initiativeInput}
+                onChange={(e) => setInitiativeInput(e.target.value)}
+                placeholder="10"
+                className="bg-slate-700 border-slate-600 text-white"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirm();
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Adicionar NPC
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
+export { NPCTemplate };

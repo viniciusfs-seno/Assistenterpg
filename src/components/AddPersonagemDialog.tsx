@@ -17,6 +17,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
   const [initiative, setInitiative] = useState('10');
   const [maxHealth, setMaxHealth] = useState('50');
   const [maxStamina, setMaxStamina] = useState('20');
+  const [maxCursedEnergy, setMaxCursedEnergy] = useState('0');
+  const [maxSanity, setMaxSanity] = useState('100');
   const [isPlayer, setIsPlayer] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,6 +27,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
     const initiativeNum = parseInt(initiative) || 10;
     const healthNum = parseInt(maxHealth) || 50;
     const staminaNum = parseInt(maxStamina) || 20;
+    const cursedEnergyNum = parseInt(maxCursedEnergy) || 0;
+    const sanityNum = parseInt(maxSanity) || 100;
 
     onAdd({
       name: name.trim() || 'Unnamed',
@@ -33,6 +37,10 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
       maxHealth: healthNum,
       stamina: staminaNum,
       maxStamina: staminaNum,
+      cursedEnergy: cursedEnergyNum,
+      maxCursedEnergy: cursedEnergyNum,
+      sanity: sanityNum,
+      maxSanity: sanityNum,
       isPlayer,
     });
 
@@ -41,6 +49,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
     setInitiative('10');
     setMaxHealth('50');
     setMaxStamina('20');
+    setMaxCursedEnergy('0');
+    setMaxSanity('100');
     setIsPlayer(true);
     setOpen(false);
   };
@@ -106,6 +116,30 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                   value={maxStamina}
                   onChange={(e) => setMaxStamina(e.target.value)}
                   placeholder="20"
+                  className="bg-slate-700 border-slate-600 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cursedEnergy">Energia Amaldiçoada</Label>
+                <Input
+                  id="cursedEnergy"
+                  type="number"
+                  value={maxCursedEnergy}
+                  onChange={(e) => setMaxCursedEnergy(e.target.value)}
+                  placeholder="0"
+                  className="bg-slate-700 border-slate-600 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sanity">Sanidade</Label>
+                <Input
+                  id="sanity"
+                  type="number"
+                  value={maxSanity}
+                  onChange={(e) => setMaxSanity(e.target.value)}
+                  placeholder="100"
                   className="bg-slate-700 border-slate-600 text-white"
                 />
               </div>

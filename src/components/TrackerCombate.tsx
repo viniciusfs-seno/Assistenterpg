@@ -28,6 +28,8 @@ export interface Combatant {
   maxStamina: number;
   cursedEnergy: number;
   maxCursedEnergy: number;
+  sanity: number;
+  maxSanity: number;
   isPlayer: boolean;
   isDeceased?: boolean;
   deathSaveCount?: number;
@@ -111,6 +113,8 @@ export function TrackerCombate() {
       maxStamina: npc.maxStamina,
       cursedEnergy: 0,
       maxCursedEnergy: 0,
+      sanity: 100,
+      maxSanity: 100,
       isPlayer: false,
     };
     addCombatant(npcCombatant);
@@ -237,6 +241,7 @@ export function TrackerCombate() {
       health: c.maxHealth,
       stamina: c.maxStamina,
       cursedEnergy: c.maxCursedEnergy ?? c.cursedEnergy ?? 0,
+      sanity: c.maxSanity ?? c.sanity ?? 100,
       deathSaveCount: 3,
       isDeceased: false,
       damageTaken: 0,

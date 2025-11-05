@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
-import { LoginPage } from './components/PaginaLogin';
-import { MainMenu } from './components/PaginaMenuPrincipal';
-import { RoomCombatTracker } from './components/TrackerCombateSala'
+import { PaginaLogin } from './components/PaginaLogin';
+import { PaginaMenuPrincipal } from './components/PaginaMenuPrincipal';
+import { TrackerCombateSala } from './components/TrackerCombateSala';
 import { Sword } from 'lucide-react';
 
 function AppContent() {
@@ -29,7 +29,7 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LoginPage />;
+    return <PaginaLogin />;
   }
 
   if (currentRoom) {
@@ -44,7 +44,7 @@ function AppContent() {
             </div>
             <p className="text-slate-400">Gerenciador de Combate do Seno</p>
           </div>
-          <RoomCombatTracker
+          <TrackerCombateSala
             roomCode={currentRoom.code}
             isDM={currentRoom.isDM}
             onLeaveRoom={handleLeaveRoom}
@@ -54,7 +54,7 @@ function AppContent() {
     );
   }
 
-  return <MainMenu onJoinRoom={handleJoinRoom} />;
+  return <PaginaMenuPrincipal onJoinRoom={handleJoinRoom} />;
 }
 
 export default function App() {

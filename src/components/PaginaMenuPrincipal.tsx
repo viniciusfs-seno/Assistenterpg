@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { RoomManager } from './GerenciadorSala';
-import { CharacterManager } from './GerenciadorPersonagem';
+import { GerenciadorSala } from './GerenciadorSala';
+import { GerenciadorPersonagem } from './GerenciadorPersonagem';
 import { TrackerCombate } from './TrackerCombate';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -12,7 +12,7 @@ interface MainMenuProps {
   onJoinRoom: (roomCode: string, isDM: boolean) => void;
 }
 
-export function MainMenu({ onJoinRoom }: MainMenuProps) {
+export function PaginaMenuPrincipal({ onJoinRoom }: MainMenuProps) {
   const { user, signOut } = useAuth();
 
   return (
@@ -64,11 +64,11 @@ export function MainMenu({ onJoinRoom }: MainMenuProps) {
             </TabsList>
 
             <TabsContent value="rooms">
-              <RoomManager onJoinRoom={onJoinRoom} />
+              <GerenciadorSala onJoinRoom={onJoinRoom} />
             </TabsContent>
 
             <TabsContent value="characters">
-              <CharacterManager />
+              <GerenciadorPersonagem />
             </TabsContent>
 
             <TabsContent value="local">

@@ -3,6 +3,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
+import { Input } from './ui/input';
 import {
   Heart,
   Zap,
@@ -14,6 +15,9 @@ import {
   HeartPulse,
   Skull,
   RotateCcw,
+  Edit,
+  Check,
+  Brain,
 } from "lucide-react";
 import type { Combatant } from './TrackerCombate';
 
@@ -39,28 +43,36 @@ export function CombatantCard({
   const [editingHealth, setEditingHealth] = useState(false);
   const [editingStamina, setEditingStamina] = useState(false);
   const [editingCursed, setEditingCursed] = useState(false);
+  const [editingSanity, setEditingSanity] = useState(false);
+  const [editingInitiative, setEditingInitiative] = useState(false);
   const [healthValue, setHealthValue] = useState(combatant.health);
   const [staminaValue, setStaminaValue] = useState(combatant.stamina);
   const [cursedValue, setCursedValue] = useState(combatant.cursedEnergy ?? 0);
+  const [sanityValue, setSanityValue] = useState(combatant.sanity ?? 100);
+  const [initiativeValue, setInitiativeValue] = useState(combatant.initiative);
 
   const canEdit = isDM || isOwner;
 
-  const adjust = (field: 'health' | 'stamina' | 'cursed', amount: number) => {
+  const adjust = (field: 'health' | 'stamina' | 'cursed' | 'sanity', amount: number) => {
     if (field === 'health') {
       const newHealth = Math.max(0, Math.min(combatant.maxHealth, combatant.health + amount));
       onUpdate(combatant.id, { health: newHealth });
     } else if (field === 'stamina') {
       const newStamina = Math.max(0, Math.min(combatant.maxStamina, combatant.stamina + amount));
       onUpdate(combatant.id, { stamina: newStamina });
-    } else {
+    } else if (field === 'cursed') {
       const newCursed = Math.max(0, Math.min(combatant.maxCursedEnergy ?? (combatant.cursedEnergy || 0), (combatant.cursedEnergy || 0) + amount));
       onUpdate(combatant.id, { cursedEnergy: newCursed });
+    } else {
+      const newSanity = Math.max(0, Math.min(combatant.maxSanity ?? (combatant.sanity || 100), (combatant.sanity || 100) + amount));
+      onUpdate(combatant.id, { sanity: newSanity });
     }
   };
 
   const healthPercent = combatant.maxHealth > 0 ? (combatant.health / combatant.maxHealth) * 100 : 0;
   const staminaPercent = combatant.maxStamina > 0 ? (combatant.stamina / combatant.maxStamina) * 100 : 0;
   const cursedPercent = (combatant.maxCursedEnergy && combatant.maxCursedEnergy > 0) ? ((combatant.cursedEnergy || 0) / combatant.maxCursedEnergy) * 100 : 0;
+  const sanityPercent = (combatant.maxSanity && combatant.maxSanity > 0) ? ((combatant.sanity || 100) / combatant.maxSanity) * 100 : 100;
 
   const getHealthColor = () => {
     if (healthPercent > 60) return "bg-green-500";
@@ -87,8 +99,48 @@ export function CombatantCard({
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 flex-1">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-slate-700 border-2 border-slate-600">
-              <span className="text-white">{combatant.initiative}</span>
+            <div className="relative group">
+              {editingInitiative ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    value={initiativeValue}
+                    onChange={(e) => setInitiativeValue(parseInt(e.target.value) || 0)}
+                    className="w-16 h-12 text-center bg-slate-700 border-slate-600 text-white"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        onUpdate(combatant.id, { initiative: initiativeValue });
+                        setEditingInitiative(false);
+                      } else if (e.key === 'Escape') {
+                        setInitiativeValue(combatant.initiative);
+                        setEditingInitiative(false);
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      onUpdate(combatant.id, { initiative: initiativeValue });
+                      setEditingInitiative(false);
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Check className="w-4 h-4 text-green-400" />
+                  </Button>
+                </div>
+              ) : (
+                <div 
+                  className="flex items-center justify-center w-12 h-12 rounded-full bg-slate-700 border-2 border-slate-600 cursor-pointer hover:border-slate-500 transition-colors"
+                  onClick={() => isDM && setEditingInitiative(true)}
+                >
+                  <span className="text-white">{combatant.initiative}</span>
+                  {isDM && (
+                    <Edit className="w-3 h-3 text-slate-400 absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -166,24 +218,48 @@ export function CombatantCard({
         )}
 
         {/* Cursed Energy (Energia Amaldiçoada) */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-slate-300">
-              <span className="text-purple-400">⚡</span>
-              <span>Energia Amaldiçoada</span>
+        {!isDeceased && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <span className="text-purple-400">⚡</span>
+                <span>Energia Amaldiçoada</span>
+              </div>
+              <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>
             </div>
-            <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>
+            <Progress value={cursedPercent} className="h-2 bg-slate-700" indicatorClassName="bg-purple-600" />
+            {canEdit && (
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" variant="outline" onClick={() => adjust('cursed', -5)} className="flex-1 border-slate-600">-5</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('cursed', -1)} className="flex-1 border-slate-600">-1</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('cursed', 1)} className="flex-1 border-slate-600">+1</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('cursed', 5)} className="flex-1 border-slate-600">+5</Button>
+              </div>
+            )}
           </div>
-          <Progress value={cursedPercent} className="h-2 bg-slate-700" indicatorClassName="bg-purple-600" />
-          {canEdit && (
-            <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={() => adjust('cursed', -5)} className="flex-1 border-slate-600">-5</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('cursed', -1)} className="flex-1 border-slate-600">-1</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('cursed', 1)} className="flex-1 border-slate-600">+1</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('cursed', 5)} className="flex-1 border-slate-600">+5</Button>
+        )}
+
+        {/* Sanity (Sanidade) */}
+        {!isDeceased && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <Brain className="w-4 h-4 text-cyan-400" />
+                <span>Sanidade</span>
+              </div>
+              <span className="text-sm text-slate-300">{combatant.sanity ?? 100} / {combatant.maxSanity ?? 100}</span>
             </div>
-          )}
-        </div>
+            <Progress value={sanityPercent} className="h-2 bg-slate-700" indicatorClassName="bg-cyan-500" />
+            {canEdit && (
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" variant="outline" onClick={() => adjust('sanity', -5)} className="flex-1 border-slate-600">-5</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('sanity', -1)} className="flex-1 border-slate-600">-1</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('sanity', 1)} className="flex-1 border-slate-600">+1</Button>
+                <Button size="sm" variant="outline" onClick={() => adjust('sanity', 5)} className="flex-1 border-slate-600">+5</Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Status */}
         <div className="mt-2">
