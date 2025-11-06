@@ -20,10 +20,10 @@ export function AddCombatantDialog({ onAdd, showInitiative = true, showSaveToggl
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [initiative, setInitiative] = useState('10');
-  const [maxHealth, setMaxHealth] = useState('50');
+  const [maxHealth, setMaxHealth] = useState('20');
   const [maxStamina, setMaxStamina] = useState('20');
-  const [maxCursedEnergy, setMaxCursedEnergy] = useState('0');
-  const [maxSanity, setMaxSanity] = useState('100');
+  const [maxCursedEnergy, setMaxCursedEnergy] = useState('20');
+  const [maxSanity, setMaxSanity] = useState('20');
   const [isPlayer, setIsPlayer] = useState(true);
   const [saveCharacter, setSaveCharacter] = useState(false);
 
@@ -32,10 +32,10 @@ export function AddCombatantDialog({ onAdd, showInitiative = true, showSaveToggl
     e.preventDefault();
 
     const initiativeNum = parseInt(initiative) || 10;
-    const healthNum = Math.min(parseInt(maxHealth) || 50, 2000);
+    const healthNum = Math.min(parseInt(maxHealth) || 20, 2000);
     const staminaNum = Math.min(parseInt(maxStamina) || 20, 2000);
-    const cursedEnergyNum = Math.min(parseInt(maxCursedEnergy) || 0, 2000);
-    const sanityNum = Math.min(parseInt(maxSanity) || 100, 2000);
+    const cursedEnergyNum = Math.min(parseInt(maxCursedEnergy) || 20, 2000);
+    const sanityNum = Math.min(parseInt(maxSanity) || 20, 2000);
 
     const characterData = {
       name: name.trim() || 'Unnamed',

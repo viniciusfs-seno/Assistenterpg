@@ -1,6 +1,6 @@
-// src/components/TrackerCombateSala.tsx — versão completa alinhada ao backend com status/presença
+// src/components/TrackerCombateSala.tsx — MIGRADO PARA WEBSOCKET (VERSÃO COMPLETA)
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
 import { CombatantCard } from "./PersonagemCard";
 import { AddCombatantDialog } from "./AddPersonagemDialog";
@@ -18,11 +18,18 @@ import {
   Users,
   Crown,
   Flag,
+  Flame,
+  Skull,
+  Zap,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { apiRequest } from "../utils/api";
+import { supabase } from "../utils/supabase/client"; // ⬅️ NOVO
 import type { Combatant } from "./TrackerCombate";
 import type { NPCTemplate } from "./BibliotecaNPC";
+import type { RealtimeChannel } from "@supabase/supabase-js"; // ⬅️ NOVO
 import {
   Dialog,
   DialogContent,
@@ -39,17 +46,27 @@ interface RoomCombatTrackerProps {
 
 const REPORTS_STORAGE_KEY = "battleReports_v1";
 
-type RoomResponse = {
-  room: {
-    code: string;
-    dmId: string;
-    status: 'ACTIVE' | 'CLOSED';
-    currentTurnIndex: number;
-    combatStarted: boolean;
-    round: number;
-    combatants: Combatant[];
-  }
+interface CombatantWithEffects extends Combatant {
+  effects?: string[];
+  wasAliveAtStart?: boolean;
+  diedOnRound?: number | null;
+}
+
+type RoomData = {
+  code: string;
+  dmId: string;
+  status: 'ACTIVE' | 'CLOSED';
+  currentTurnIndex: number;
+  combatStarted: boolean;
+  round: number;
+  combatants: CombatantWithEffects[];
 };
+
+const AVAILABLE_EFFECTS = [
+  { id: 'poisoned', label: 'Envenenado', color: 'bg-green-700', icon: '☠️' },
+  { id: 'burning', label: 'Em Chamas', color: 'bg-orange-600', icon: '🔥' },
+  { id: 'paralyzed', label: 'Paralizado', color: 'bg-purple-600', icon: '⚡' },
+];
 
 export function TrackerCombateSala({
   roomCode,
@@ -57,13 +74,12 @@ export function TrackerCombateSala({
   onLeaveRoom,
 }: RoomCombatTrackerProps) {
   const { getAccessToken, user } = useAuth();
-  const [combatants, setCombatants] = useState<Combatant[]>([]);
+  const [combatants, setCombatants] = useState<CombatantWithEffects[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [combatStarted, setCombatStarted] = useState(false);
   const [round, setRound] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showCombatReport, setShowCombatReport] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [showReportsList, setShowReportsList] = useState(false);
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [battleReports, setBattleReports] = useState<any[]>(
@@ -77,9 +93,18 @@ export function TrackerCombateSala({
     },
   );
   
-  // Estados para o relatório do jogador
   const [showPlayerReport, setShowPlayerReport] = useState(false);
   const [playerReportData, setPlayerReportData] = useState<any>(null);
+  const [showEffectsDialog, setShowEffectsDialog] = useState(false);
+  const [selectedCombatantForEffects, setSelectedCombatantForEffects] = useState<string | null>(null);
+  
+  // ⬅️ NOVO: Estado de conexão WebSocket
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  
+  const previousCombatStartedRef = useRef(combatStarted);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const sortedCombatants = [...combatants].sort(
     (a, b) => b.initiative - a.initiative,
@@ -92,42 +117,46 @@ export function TrackerCombateSala({
     (c) => c.isPlayer && c.id.startsWith(`player_${user?.id}`),
   );
 
-  // Fetch room data + presence heartbeat
-  const fetchRoom = async () => {
+  // ⬅️ NOVO: Fetch inicial (apenas uma vez)
+  const fetchRoomOnce = async () => {
     try {
       const token = await getAccessToken();
       if (!token) return;
-      const { room } = (await apiRequest(
-        `/rooms/${roomCode}`,
-        {},
-        token,
-      )) as RoomResponse;
+      
+      const response = await apiRequest(`/rooms/${roomCode}`, {}, token);
+      const roomData = response.room as RoomData;
 
-      if (!isDM && room.status !== 'ACTIVE') {
+      if (!isDM && roomData.status !== 'ACTIVE') {
         onLeaveRoom();
         return;
       }
 
-      const validCombatants = (room.combatants || []).filter(
+      const validCombatants = (roomData.combatants || []).filter(
         (c: any) => c && c.id,
       );
+      
       setCombatants(validCombatants);
-      setCurrentTurnIndex(room.currentTurnIndex || 0);
-      setCombatStarted(room.combatStarted || false);
-      setRound(room.round || 1);
+      setCurrentTurnIndex(roomData.currentTurnIndex || 0);
+      setCombatStarted(roomData.combatStarted || false);
+      previousCombatStartedRef.current = roomData.combatStarted || false;
+      setRound(roomData.round || 1);
       setLoading(false);
     } catch (err) {
       console.error("Failed to fetch room:", err);
+      setConnectionError("Erro ao carregar sala");
       setLoading(false);
     }
   };
 
-  const updateRoom = async (updates: any) => {
+    // ⬅️ MODIFICADO: Update room via HTTP (ainda precisa para persistência)
+    // ⬅️ MODIFICADO: Envia broadcast após atualizar HTTP
+  const updateRoomData = async (updates: Partial<RoomData>) => {
     try {
-      setIsSyncing(true);
       const token = await getAccessToken();
       if (!token) return;
-      const { room } = await apiRequest(
+      
+      // 1. Atualiza no servidor (persistência)
+      const response = await apiRequest(
         `/rooms/${roomCode}`,
         {
           method: "PUT",
@@ -135,70 +164,123 @@ export function TrackerCombateSala({
         },
         token,
       );
-
-      if (!isDM && room.status !== 'ACTIVE') {
-        onLeaveRoom();
-        return;
+      
+      const roomData = response.room as RoomData;
+      
+      // 2. Envia broadcast para outros clientes (tempo real)
+      if (channelRef.current) {
+        await channelRef.current.send({
+          type: 'broadcast',
+          event: 'room-update',
+          payload: roomData,
+        });
+        console.log('📤 Broadcast enviado:', roomData);
       }
     } catch (err) {
       console.error("Failed to update room:", err);
-    } finally {
-      setIsSyncing(false);
+      setConnectionError("Erro ao atualizar sala");
     }
   };
 
-  // Função para detectar fim de combate para jogadores
-  const checkForCombatEnd = async () => {
+
+  // ⬅️ NOVO: Heartbeat do mestre (mantém sala ativa)
+  const sendHeartbeat = async () => {
+    if (!isDM) return;
+    
     try {
       const token = await getAccessToken();
       if (!token) return;
-      const { room } = await apiRequest(
-        `/rooms/${roomCode}`,
-        {},
-        token,
-      ) as RoomResponse;
-
-      // Se combate estava ativo mas agora parou
-      if (combatStarted && !room.combatStarted && playerCombatant) {
-        // Gera relatório específico do jogador
-        const playerStats = room.combatants.find(
-          (c: Combatant) => c.id === playerCombatant.id
-        );
-
-        if (playerStats) {
-          setPlayerReportData({
-            character: playerStats,
-            roundEnded: room.round,
-            timestamp: new Date().toISOString()
-          });
-          setShowPlayerReport(true);
-          setCombatStarted(false);
-        }
-      }
+      
+      await apiRequest(`/rooms/${roomCode}`, {}, token);
     } catch (err) {
-      console.error("Failed to check combat end:", err);
+      console.error("Heartbeat failed:", err);
     }
   };
 
+    // ⬅️ CORRIGIDO: Usa Broadcast ao invés de Postgres Changes
   useEffect(() => {
-    fetchRoom();
-    const interval = setInterval(() => {
-      if (!isSyncing) {
-        fetchRoom();
-        
-        // Verifica se o combate acabou para jogadores
-        if (!isDM && combatStarted && playerCombatant) {
-          checkForCombatEnd();
-        }
+    if (!roomCode) return;
+
+    fetchRoomOnce();
+
+    // ⬅️ NOVO: Canal de broadcast para atualizações instantâneas
+    const channel = supabase
+      .channel(`room:${roomCode}`, {
+        config: {
+          broadcast: { self: true }, // Recebe até suas próprias mensagens
+        },
+      })
+      .on('broadcast', { event: 'room-update' }, (payload) => {
+      console.log('📡 Room updated via Broadcast:', payload);
+      
+      const roomData = payload.payload as RoomData;
+      
+      // ⬅️ CORRIGIDO: Busca jogador atual nos dados recebidos
+      const currentPlayerCombatant = roomData.combatants.find(
+        (c: CombatantWithEffects) => c.isPlayer && c.id.startsWith(`player_${user?.id}`)
+      );
+      
+      // Detectar fim de combate para jogadores
+      if (!isDM && previousCombatStartedRef.current && !roomData.combatStarted && currentPlayerCombatant) {
+        console.log('🎯 Combate encerrado detectado para jogador!');
+        setPlayerReportData({
+          character: currentPlayerCombatant,
+          roundEnded: roomData.round,
+          timestamp: new Date().toISOString()
+        });
+        setShowPlayerReport(true);
       }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [roomCode, isSyncing, combatStarted, isDM, playerCombatant]);
+      
+      const validCombatants = (roomData.combatants || []).filter(
+        (c: any) => c && c.id
+      );
+      
+      setCombatants(validCombatants);
+      setCurrentTurnIndex(roomData.currentTurnIndex || 0);
+      setCombatStarted(roomData.combatStarted || false);
+      previousCombatStartedRef.current = roomData.combatStarted || false;
+      setRound(roomData.round || 1);
+      
+      if (!isDM && roomData.status !== 'ACTIVE') {
+        onLeaveRoom();
+      }
+    })
+      .subscribe((status) => {
+        console.log('🔌 Broadcast status:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          setConnectionError(null);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setIsConnected(false);
+          setConnectionError('Conexão perdida');
+        } else if (status === 'CLOSED') {
+          setIsConnected(false);
+        }
+      });
+
+    channelRef.current = channel;
+
+    if (isDM) {
+      sendHeartbeat();
+      heartbeatIntervalRef.current = setInterval(sendHeartbeat, 10000);
+    }
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+    };
+  }, [roomCode, isDM, user?.id]);
 
   const addCombatant = async (
-    combatant: Omit<Combatant, "id">,
+    combatant: Omit<CombatantWithEffects, "id">,
   ) => {
-    // Limit players to 1 character
     if (!isDM) {
       const playerHasCharacter = combatants.some(
         (c) => c.id.startsWith(`player_${user?.id}`)
@@ -209,7 +291,7 @@ export function TrackerCombateSala({
       }
     }
 
-    const newCombatant = {
+    const newCombatant: CombatantWithEffects = {
       ...combatant,
       id: `${isDM ? "npc" : `player_${user?.id}`}_${Date.now()}`,
       damageTaken: 0,
@@ -219,10 +301,14 @@ export function TrackerCombateSala({
       timesFallen: 0,
       timesDied: 0,
       fellOnRound: null,
+      effects: [],
+      wasAliveAtStart: undefined,
+      diedOnRound: null,
     };
     const updatedCombatants = [...combatants, newCombatant];
+    
     setCombatants(updatedCombatants);
-    await updateRoom({ combatants: updatedCombatants });
+    await updateRoomData({ combatants: updatedCombatants });
   };
 
   const saveCharacterToList = async (combatant: Omit<Combatant, 'id'>) => {
@@ -259,26 +345,26 @@ export function TrackerCombateSala({
   };
 
   const removeCombatant = async (id: string) => {
-    const index = activeCombatants.findIndex(
-      (c) => c.id === id,
-    );
+    const index = activeCombatants.findIndex((c) => c.id === id);
     const newList = combatants.filter((c) => c.id !== id);
+    
+    setCombatants(newList);
+    
     if (combatStarted && index < currentTurnIndex) {
       const newIndex = Math.max(0, currentTurnIndex - 1);
       setCurrentTurnIndex(newIndex);
-      await updateRoom({
+      await updateRoomData({
         combatants: newList,
         currentTurnIndex: newIndex,
       });
     } else {
-      await updateRoom({ combatants: newList });
+      await updateRoomData({ combatants: newList });
     }
-    setCombatants(newList);
   };
 
   const updateCombatant = async (
     id: string,
-    updates: Partial<Combatant>,
+    updates: Partial<CombatantWithEffects>,
   ) => {
     const updatedCombatants = combatants.map((c) => {
       if (c.id !== id) return c;
@@ -307,12 +393,21 @@ export function TrackerCombateSala({
         updated.deathSaveCount = undefined;
         updated.isDeceased = false;
         updated.fellOnRound = null;
+        updated.diedOnRound = null;
+      }
+      
+      if (updated.isDeceased && !c.isDeceased) {
+        updated.effects = [];
+        if (c.wasAliveAtStart) {
+          updated.diedOnRound = round;
+        }
       }
 
       return updated;
     });
+    
     setCombatants(updatedCombatants);
-    await updateRoom({ combatants: updatedCombatants });
+    await updateRoomData({ combatants: updatedCombatants });
   };
 
   const reviveCombatant = async (id: string) => {
@@ -324,11 +419,30 @@ export function TrackerCombateSala({
             deathSaveCount: undefined,
             isDeceased: false,
             fellOnRound: null,
+            diedOnRound: null,
           }
         : c,
     );
     setCombatants(updatedCombatants);
-    await updateRoom({ combatants: updatedCombatants });
+    await updateRoomData({ combatants: updatedCombatants });
+  };
+  
+  const toggleEffect = async (combatantId: string, effectId: string) => {
+    const updatedCombatants = combatants.map((c) => {
+      if (c.id !== combatantId) return c;
+      const currentEffects = c.effects || [];
+      const hasEffect = currentEffects.includes(effectId);
+      
+      return {
+        ...c,
+        effects: hasEffect
+          ? currentEffects.filter(e => e !== effectId)
+          : [...currentEffects, effectId]
+      };
+    });
+    
+    setCombatants(updatedCombatants);
+    await updateRoomData({ combatants: updatedCombatants });
   };
 
   const persistReports = (reports: any[]) => {
@@ -368,7 +482,7 @@ export function TrackerCombateSala({
     setCombatStarted(false);
     setCurrentTurnIndex(0);
     setShowCombatReport(true);
-    await updateRoom({
+    await updateRoomData({
       combatStarted: false,
       currentTurnIndex: 0,
     });
@@ -395,12 +509,17 @@ export function TrackerCombateSala({
         }
         const newCount = c.deathSaveCount - 1;
         if (newCount <= 0) {
-          return {
+          const updated = {
             ...c,
             deathSaveCount: 0,
             isDeceased: true,
             timesDied: (c.timesDied || 0) + 1,
+            effects: [],
           };
+          if (c.wasAliveAtStart) {
+            updated.diedOnRound = round;
+          }
+          return updated;
         }
         return { ...c, deathSaveCount: newCount };
       }
@@ -416,14 +535,14 @@ export function TrackerCombateSala({
     if (nextIndex >= updatedActiveCombatants.length) {
       setCurrentTurnIndex(0);
       setRound(round + 1);
-      await updateRoom({
+      await updateRoomData({
         combatants: updatedWithDeathSaves,
         currentTurnIndex: 0,
         round: round + 1,
       });
     } else {
       setCurrentTurnIndex(nextIndex);
-      await updateRoom({
+      await updateRoomData({
         combatants: updatedWithDeathSaves,
         currentTurnIndex: nextIndex,
       });
@@ -432,10 +551,19 @@ export function TrackerCombateSala({
 
   const startCombat = async () => {
     if (combatants.length > 0) {
+      const combatantsWithStartFlag = combatants.map(c => ({
+        ...c,
+        wasAliveAtStart: !c.isDeceased && c.health > 0,
+        diedOnRound: null,
+      }));
+      
+      setCombatants(combatantsWithStartFlag);
       setCombatStarted(true);
+      previousCombatStartedRef.current = true;
       setCurrentTurnIndex(0);
       setRound(1);
-      await updateRoom({
+      await updateRoomData({
+        combatants: combatantsWithStartFlag,
         combatStarted: true,
         currentTurnIndex: 0,
         round: 1,
@@ -457,12 +585,16 @@ export function TrackerCombateSala({
       timesFallen: 0,
       timesDied: 0,
       fellOnRound: null,
+      effects: [],
+      wasAliveAtStart: undefined,
+      diedOnRound: null,
     }));
     setCombatStarted(false);
+    previousCombatStartedRef.current = false;
     setCurrentTurnIndex(0);
     setRound(1);
     setCombatants(resetCombatants);
-    await updateRoom({
+    await updateRoomData({
       combatants: resetCombatants,
       combatStarted: false,
       currentTurnIndex: 0,
@@ -473,14 +605,51 @@ export function TrackerCombateSala({
   const clearAll = async () => {
     setCombatants([]);
     setCombatStarted(false);
+    previousCombatStartedRef.current = false;
     setCurrentTurnIndex(0);
     setRound(1);
-    await updateRoom({
+    await updateRoomData({
       combatants: [],
       combatStarted: false,
       currentTurnIndex: 0,
       round: 1,
     });
+  };
+  
+  const getStatusBadges = (c: CombatantWithEffects) => {
+    const badges = [];
+    const isWounded = c.health > 0 && c.health <= c.maxHealth * 0.5;
+    
+    if (c.isDeceased) {
+      badges.push(<Badge key="deceased" className="bg-red-600">Morto</Badge>);
+    } else if (c.health === 0) {
+      badges.push(<Badge key="fallen" className="bg-orange-600">Caído</Badge>);
+      if (isWounded) {
+        badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
+      }
+    } else {
+      badges.push(<Badge key="alive" className="bg-green-600">Vivo</Badge>);
+      if (isWounded) {
+        badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
+      }
+    }
+    
+    return badges;
+  };
+  
+  const getEffectBadges = (c: CombatantWithEffects) => {
+    if (!c.effects || c.effects.length === 0) return null;
+    
+    return c.effects.map(effectId => {
+      const effect = AVAILABLE_EFFECTS.find(e => e.id === effectId);
+      if (!effect) return null;
+      
+      return (
+        <Badge key={effectId} className={`${effect.color} text-white`}>
+          {effect.icon} {effect.label}
+        </Badge>
+      );
+    }).filter(Boolean);
   };
 
   if (loading) {
@@ -494,6 +663,24 @@ export function TrackerCombateSala({
       </div>
     );
   }
+
+  const ConnectionIndicator = () => (
+    <div className="flex items-center gap-2">
+      {isConnected ? (
+        <>
+          <Wifi className="w-4 h-4 text-green-400" />
+          <span className="text-xs text-green-400">Conectado</span>
+        </>
+      ) : (
+        <>
+          <WifiOff className="w-4 h-4 text-red-400" />
+          <span className="text-xs text-red-400">
+            {connectionError || 'Desconectado'}
+          </span>
+        </>
+      )}
+    </div>
+  );
 
   // Player view
   if (!isDM) {
@@ -520,6 +707,7 @@ export function TrackerCombateSala({
                   <span className="text-slate-400">
                     Sala: {roomCode}
                   </span>
+                  <ConnectionIndicator />
                 </div>
               </div>
             </div>
@@ -591,7 +779,7 @@ export function TrackerCombateSala({
                             : 'bg-slate-700/50'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-slate-300 text-sm">
                             {idx + 1}.
                           </span>
@@ -604,20 +792,9 @@ export function TrackerCombateSala({
                             </Badge>
                           )}
                         </div>
-                        <div>
-                          {c.isDeceased ? (
-                            <Badge className="bg-red-600">
-                              Morto
-                            </Badge>
-                          ) : c.health === 0 ? (
-                            <Badge className="bg-orange-600">
-                              Caído
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-600">
-                              Vivo
-                            </Badge>
-                          )}
+                        <div className="flex gap-1 flex-wrap">
+                          {getStatusBadges(c)}
+                          {getEffectBadges(c)}
                         </div>
                       </div>
                     );
@@ -628,7 +805,6 @@ export function TrackerCombateSala({
           </div>
         )}
 
-        {/* Player Combat End Report */}
         <Dialog open={showPlayerReport} onOpenChange={setShowPlayerReport}>
           <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
             <DialogHeader>
@@ -649,7 +825,13 @@ export function TrackerCombateSala({
                       {playerReportData.character.name}
                     </div>
                     <div className="text-sm text-slate-300">
-                      Sobreviveu até o Round {playerReportData.roundEnded}
+                      {playerReportData.character.isDeceased && playerReportData.character.diedOnRound ? (
+                        <>Morreu no Round {playerReportData.character.diedOnRound}</>
+                      ) : playerReportData.character.isDeceased && !playerReportData.character.wasAliveAtStart ? (
+                        <>Estava morto durante todo o combate</>
+                      ) : (
+                        <>Sobreviveu até o Round {playerReportData.roundEnded}</>
+                      )}
                     </div>
                   </AlertDescription>
                 </Alert>
@@ -665,14 +847,8 @@ export function TrackerCombateSala({
                     </div>
                     <div>
                       <div className="text-slate-400 text-sm">Status</div>
-                      <div>
-                        {playerReportData.character.isDeceased ? (
-                          <Badge className="bg-red-600">Morto</Badge>
-                        ) : playerReportData.character.health === 0 ? (
-                          <Badge className="bg-orange-600">Caído</Badge>
-                        ) : (
-                          <Badge className="bg-green-600">Vivo</Badge>
-                        )}
+                      <div className="flex gap-1 flex-wrap">
+                        {getStatusBadges(playerReportData.character)}
                       </div>
                     </div>
                     <div>
@@ -690,7 +866,7 @@ export function TrackerCombateSala({
                   </div>
                 </Card>
 
-                {playerReportData.character.isDeceased && (
+                {playerReportData.character.isDeceased && playerReportData.character.wasAliveAtStart && (
                   <Alert variant="destructive" className="bg-red-900/20 border-red-700">
                     <AlertDescription className="text-center">
                       Seu personagem morreu durante o combate
@@ -740,6 +916,7 @@ export function TrackerCombateSala({
               <span className="text-slate-400">
                 Sala: {roomCode}
               </span>
+              <ConnectionIndicator />
             </div>
           </div>
         </div>
@@ -748,7 +925,7 @@ export function TrackerCombateSala({
           <div className="flex gap-2 flex-wrap">
             <AddCombatantDialog 
               onAdd={addCombatant}
-              showSaveToggle={!isDM}
+              showSaveToggle={true}
               onSaveCharacter={saveCharacterToList}
             />
             <SelectExistingCharacterDialog
@@ -841,24 +1018,85 @@ export function TrackerCombateSala({
       ) : (
         <div className="space-y-3">
           {sortedCombatants.map((combatant) => (
-            <CombatantCard
-              key={combatant.id}
-              combatant={combatant}
-              isCurrentTurn={
-                combatStarted &&
-                activeCombatants[currentTurnIndex]?.id ===
-                  combatant.id
-              }
-              onUpdate={updateCombatant}
-              onRemove={removeCombatant}
-              onRevive={reviveCombatant}
-              isDM={isDM}
-            />
+            <div key={combatant.id} className="space-y-2">
+              <CombatantCard
+                combatant={combatant}
+                isCurrentTurn={
+                  combatStarted &&
+                  activeCombatants[currentTurnIndex]?.id ===
+                    combatant.id
+                }
+                onUpdate={updateCombatant}
+                onRemove={removeCombatant}
+                onRevive={reviveCombatant}
+                isDM={isDM}
+              />
+              {isDM && !combatant.isDeceased && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedCombatantForEffects(combatant.id);
+                    setShowEffectsDialog(true);
+                  }}
+                  className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  ⚡ Gerenciar Efeitos
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       )}
 
-      {/* Current Combat Report */}
+      <Dialog open={showEffectsDialog} onOpenChange={setShowEffectsDialog}>
+        <DialogContent className="max-w-md bg-slate-800 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Efeitos</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {selectedCombatantForEffects && 
+                combatants.find(c => c.id === selectedCombatantForEffects)?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 p-4">
+            {AVAILABLE_EFFECTS.map(effect => {
+              const combatant = combatants.find(c => c.id === selectedCombatantForEffects);
+              const hasEffect = combatant?.effects?.includes(effect.id) || false;
+              
+              return (
+                <Button
+                  key={effect.id}
+                  variant={hasEffect ? "default" : "outline"}
+                  className={`w-full justify-start ${hasEffect ? effect.color : 'border-slate-600'}`}
+                  onClick={() => {
+                    if (selectedCombatantForEffects) {
+                      toggleEffect(selectedCombatantForEffects, effect.id);
+                    }
+                  }}
+                >
+                  <span className="mr-2">{effect.icon}</span>
+                  {effect.label}
+                  {hasEffect && <span className="ml-auto">✓</span>}
+                </Button>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end p-4">
+            <Button
+              onClick={() => {
+                setShowEffectsDialog(false);
+                setSelectedCombatantForEffects(null);
+              }}
+              className="bg-green-700 hover:bg-green-600"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={showCombatReport}
         onOpenChange={setShowCombatReport}
@@ -921,7 +1159,6 @@ export function TrackerCombateSala({
         </DialogContent>
       </Dialog>
 
-      {/* Reports list dialog */}
       <Dialog
         open={showReportsList}
         onOpenChange={setShowReportsList}
@@ -1003,7 +1240,6 @@ export function TrackerCombateSala({
         </DialogContent>
       </Dialog>
 
-      {/* Individual Report View Dialog */}
       <Dialog
         open={!!selectedReport}
         onOpenChange={(open) => !open && setSelectedReport(null)}
