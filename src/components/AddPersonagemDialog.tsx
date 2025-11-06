@@ -1,3 +1,5 @@
+// AddPersonagemDialog.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
@@ -21,9 +23,10 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
   const [maxSanity, setMaxSanity] = useState('100');
   const [isPlayer, setIsPlayer] = useState(true);
 
+  // Envia dados validados ao callback e reseta o diálogo
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const initiativeNum = parseInt(initiative) || 10;
     const healthNum = parseInt(maxHealth) || 50;
     const staminaNum = parseInt(maxStamina) || 20;
@@ -44,7 +47,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
       isPlayer,
     });
 
-    // Reset form
+    // Reseta o formulário e fecha o diálogo
     setName('');
     setInitiative('10');
     setMaxHealth('50');
@@ -72,6 +75,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
+            {/* Campo: Nome */}
             <div className="space-y-2">
               <Label htmlFor="name">Nome</Label>
               <Input
@@ -83,6 +87,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
               />
             </div>
 
+            {/* Campo: Iniciativa */}
             <div className="space-y-2">
               <Label htmlFor="initiative">Iniciativa</Label>
               <Input
@@ -95,6 +100,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
               />
             </div>
 
+            {/* Campos: Vida / Esforço / Energia / Sanidade */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="health">Vida máxima</Label>
@@ -145,6 +151,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
               </div>
             </div>
 
+            {/* Toggle: Jogador ou NPC */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="player-toggle">Jogador</Label>

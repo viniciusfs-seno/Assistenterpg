@@ -1,3 +1,5 @@
+// TrackerCombate.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from "react";
 import { CombatantCard } from "./PersonagemCard";
 import { AddCombatantDialog } from "./AddPersonagemDialog";
@@ -18,6 +20,7 @@ import {
 } from "./ui/dialog";
 import type { NPCTemplate } from "./BibliotecaNPC";
 
+// Estrutura do combatente em memória local
 export interface Combatant {
   id: string;
   name: string;
@@ -40,6 +43,7 @@ export interface Combatant {
   fellOnRound?: number | null;
 }
 
+// Estrutura do relatório salvo em localStorage
 export interface BattleReport {
   id: string;
   timestamp: string;
@@ -58,10 +62,12 @@ export interface BattleReport {
 const REPORTS_STORAGE_KEY = "battleReports_v1";
 
 export function TrackerCombate() {
+  // Estado principal do combate (local)
   const [combatants, setCombatants] = useState<Combatant[]>([]);
   const [combatStarted, setCombatStarted] = useState(false);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [round, setRound] = useState(1);
+  // Diálogos e relatórios
   const [showCombatReport, setShowCombatReport] = useState(false);
   const [showReportsList, setShowReportsList] = useState(false);
   const [battleReports, setBattleReports] = useState<BattleReport[]>(() => {
@@ -74,11 +80,13 @@ export function TrackerCombate() {
   });
   const [selectedReport, setSelectedReport] = useState<BattleReport | null>(null);
 
+  // Ordenação por iniciativa e filtragem de vivos (não mortos definitivos)
   const sortedCombatants = [...combatants].sort(
     (a, b) => b.initiative - a.initiative
   );
   const activeCombatants = sortedCombatants.filter((c) => !c.isDeceased);
 
+  // Persistência de relatórios no localStorage
   const persistReports = (reports: BattleReport[]) => {
     setBattleReports(reports);
     try {
@@ -88,6 +96,7 @@ export function TrackerCombate() {
     }
   };
 
+  // Adiciona combatente (gera id interno e zera contadores)
   const addCombatant = (combatant: Omit<Combatant, "id">) => {
     const newCombatant: Combatant = {
       ...combatant,
@@ -103,6 +112,7 @@ export function TrackerCombate() {
     setCombatants((prev) => [...prev, newCombatant]);
   };
 
+  // Converte template de NPC em combatente e adiciona
   const handleSelectNPC = (npc: Omit<NPCTemplate, "description" | "category">) => {
     const npcCombatant: Omit<Combatant, "id"> = {
       name: npc.name,
@@ -120,6 +130,7 @@ export function TrackerCombate() {
     addCombatant(npcCombatant);
   };
 
+  // Remove combatente e ajusta índice de turno quando necessário
   const removeCombatant = (id: string) => {
     const index = activeCombatants.findIndex((c) => c.id === id);
     if (combatStarted && index < currentTurnIndex) {
@@ -129,23 +140,27 @@ export function TrackerCombate() {
     setCombatants((prev) => prev.filter((c) => c.id !== id));
   };
 
+  // Atualiza atributos e deriva contadores de dano/queda/morte
   const updateCombatant = (id: string, updates: Partial<Combatant>) => {
     setCombatants((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
         const updated = { ...c, ...updates };
 
+        // Dano tomado na transição de health
         if (updates.health !== undefined && updates.health < c.health) {
           const damageTaken = c.health - updates.health;
           updated.damageTaken = (c.damageTaken || 0) + damageTaken;
         }
 
+        // Caiu a 0 de vida: reinicia saves de morte e marca rodada
         if (updated.health === 0 && c.health > 0 && !updated.isDeceased) {
           updated.deathSaveCount = 3;
           updated.timesFallen = (c.timesFallen || 0) + 1;
           updated.fellOnRound = round;
         }
 
+        // Se levantou (>0), limpa estados de queda/morte
         if (updated.health > 0) {
           updated.deathSaveCount = undefined;
           updated.isDeceased = false;
@@ -157,6 +172,7 @@ export function TrackerCombate() {
     );
   };
 
+  // Reviver: volta com 1 HP, limpa flags de morte/queda
   const reviveCombatant = (id: string) => {
     setCombatants((prev) =>
       prev.map((c) =>
@@ -167,6 +183,7 @@ export function TrackerCombate() {
     );
   };
 
+  // Iniciar combate: reseta turno e round
   const startCombat = () => {
     if (combatants.length > 0) {
       setCombatStarted(true);
@@ -175,6 +192,7 @@ export function TrackerCombate() {
     }
   };
 
+  // Gera e salva relatório do combate atual (round encerrado)
   const generateReportAndPersist = (endRound: number) => {
     const report: BattleReport = {
       id: Date.now().toString(),
@@ -195,6 +213,7 @@ export function TrackerCombate() {
     return report;
   };
 
+  // Encerrar combate atual: registra relatório e volta para estado inicial de turno
   const endCombat = () => {
     generateReportAndPersist(round);
     setShowCombatReport(true);
@@ -202,6 +221,7 @@ export function TrackerCombate() {
     setCurrentTurnIndex(0);
   };
 
+  // Avançar turno: processa saves de morte e rota índice, avançando round ao final
   const nextTurn = () => {
     if (activeCombatants.length === 0) return;
 
@@ -214,6 +234,7 @@ export function TrackerCombate() {
         !c.isDeceased &&
         c.deathSaveCount !== undefined
       ) {
+        // Evita decrementar no mesmo round em que caiu
         if (c.fellOnRound === round) return c;
         const newCount = c.deathSaveCount - 1;
         if (newCount <= 0) {
@@ -235,6 +256,7 @@ export function TrackerCombate() {
     }
   };
 
+  // Reset do estado dos combatentes mantendo lista (novo combate com mesmo grupo)
   const resetCombat = () => {
     const resetCombatants = combatants.map((c) => ({
       ...c,
@@ -256,6 +278,7 @@ export function TrackerCombate() {
     setRound(1);
   };
 
+  // Limpar completamente a lista de combatentes
   const clearAll = () => {
     setCombatants([]);
     setCombatStarted(false);
@@ -265,6 +288,7 @@ export function TrackerCombate() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* Barra de ações principal */}
       <Card className="p-4 bg-slate-800/50 border-slate-700">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2">
@@ -329,6 +353,7 @@ export function TrackerCombate() {
         </div>
       </Card>
 
+      {/* Indicador de round em combate */}
       {combatStarted && (
         <Alert className="bg-slate-800/50 border-slate-700">
           <AlertDescription className="text-center text-white">
@@ -337,6 +362,7 @@ export function TrackerCombate() {
         </Alert>
       )}
 
+      {/* Lista de combatentes ordenados por iniciativa */}
       {sortedCombatants.length === 0 ? (
         <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
           <div className="text-center text-slate-500">
@@ -360,7 +386,7 @@ export function TrackerCombate() {
         </div>
       )}
 
-      {/* Relatório do combate atual */}
+      {/* Relatório do combate atual (resumo) */}
       <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
@@ -405,7 +431,7 @@ export function TrackerCombate() {
         </DialogContent>
       </Dialog>
 
-      {/* Lista de relatórios */}
+      {/* Lista de relatórios salvos */}
       <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>

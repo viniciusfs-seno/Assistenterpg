@@ -1,3 +1,5 @@
+// src/components/TrackerCombateSala.tsx — versão completa alinhada ao backend com status/presença
+
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { CombatantCard } from "./PersonagemCard";
@@ -37,6 +39,18 @@ interface RoomCombatTrackerProps {
 
 const REPORTS_STORAGE_KEY = "battleReports_v1";
 
+type RoomResponse = {
+  room: {
+    code: string;
+    dmId: string;
+    status: 'ACTIVE' | 'CLOSED';
+    currentTurnIndex: number;
+    combatStarted: boolean;
+    round: number;
+    combatants: Combatant[];
+  }
+};
+
 export function TrackerCombateSala({
   roomCode,
   isDM,
@@ -75,16 +89,21 @@ export function TrackerCombateSala({
     (c) => c.isPlayer && c.id.startsWith(`player_${user?.id}`),
   );
 
-  // Fetch room data
+  // Fetch room data + presence heartbeat
   const fetchRoom = async () => {
     try {
       const token = await getAccessToken();
       if (!token) return;
-      const { room } = await apiRequest(
+      const { room } = (await apiRequest(
         `/rooms/${roomCode}`,
         {},
         token,
-      );
+      )) as RoomResponse;
+
+      if (!isDM && room.status !== 'ACTIVE') {
+        onLeaveRoom();
+        return;
+      }
 
       const validCombatants = (room.combatants || []).filter(
         (c: any) => c && c.id,
@@ -105,7 +124,7 @@ export function TrackerCombateSala({
       setIsSyncing(true);
       const token = await getAccessToken();
       if (!token) return;
-      await apiRequest(
+      const { room } = await apiRequest(
         `/rooms/${roomCode}`,
         {
           method: "PUT",
@@ -113,6 +132,11 @@ export function TrackerCombateSala({
         },
         token,
       );
+
+      if (!isDM && room.status !== 'ACTIVE') {
+        onLeaveRoom();
+        return;
+      }
     } catch (err) {
       console.error("Failed to update room:", err);
     } finally {
@@ -276,7 +300,6 @@ export function TrackerCombateSala({
     setCombatStarted(false);
     setCurrentTurnIndex(0);
     setShowCombatReport(true);
-    // Sync to server that combat has ended
     await updateRoom({
       combatStarted: false,
       currentTurnIndex: 0,
@@ -287,8 +310,6 @@ export function TrackerCombateSala({
     if (activeCombatants.length === 0) return;
 
     const currentCombatant = activeCombatants[currentTurnIndex];
-    
-    // Safety check: if currentCombatant is undefined, reset turn index
     if (!currentCombatant) {
       setCurrentTurnIndex(0);
       return;
@@ -319,7 +340,6 @@ export function TrackerCombateSala({
     });
     setCombatants(updatedWithDeathSaves);
 
-    // Recalculate active combatants after death save updates
     const updatedActiveCombatants = updatedWithDeathSaves
       .filter((c) => !c.isDeceased)
       .sort((a, b) => b.initiative - a.initiative);
@@ -407,7 +427,7 @@ export function TrackerCombateSala({
     );
   }
 
-  // Player view - show player's own combatant and initiative list; allow player to edit own stats
+  // Player view
   if (!isDM) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
@@ -479,10 +499,9 @@ export function TrackerCombateSala({
               onUpdate={updateCombatant}
               onRemove={removeCombatant}
               isDM={false}
-              isOwner={true} // allow editing of own stats
+              isOwner={true}
             />
 
-            {/* Initiative order list (names + status) */}
             {combatStarted && sortedCombatants.length > 0 && (
               <Card className="p-4 bg-slate-800/50 border-slate-700 mt-4">
                 <h4 className="text-slate-300 mb-2">
@@ -555,7 +574,6 @@ export function TrackerCombateSala({
           </div>
         </div>
 
-        {/* Controls */}
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2 flex-wrap">
             <AddCombatantDialog onAdd={addCombatant} />
@@ -583,7 +601,6 @@ export function TrackerCombateSala({
             )}
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-2">
             {combatStarted && (
               <>

@@ -1,3 +1,5 @@
+// PaginaLogin.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './ui/card';
@@ -13,15 +15,16 @@ export function PaginaLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Sign in state
+  // Estado do formulário: Entrar
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
 
-  // Sign up state
+  // Estado do formulário: Criar Conta
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpName, setSignUpName] = useState('');
 
+  // Handler: Entrar com e-mail/senha (Supabase)
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -36,6 +39,7 @@ export function PaginaLogin() {
     }
   };
 
+  // Handler: Criar conta via função serverless e autenticar em seguida
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -50,6 +54,7 @@ export function PaginaLogin() {
     }
   };
 
+  // Layout com tabs "Entrar" e "Criar Conta"
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -69,6 +74,7 @@ export function PaginaLogin() {
               <TabsTrigger value="signup">Criar Conta</TabsTrigger>
             </TabsList>
 
+            {/* Tab: Entrar */}
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -114,6 +120,7 @@ export function PaginaLogin() {
               </form>
             </TabsContent>
 
+            {/* Tab: Criar Conta */}
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">

@@ -1,3 +1,5 @@
+// AddPersonagemExistenteDialog.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
@@ -18,13 +20,17 @@ interface SelectExistingCharacterDialogProps {
 
 export function SelectExistingCharacterDialog({ onSelect, triggerButton }: SelectExistingCharacterDialogProps) {
   const { getAccessToken } = useAuth();
+  // Estado de abertura do diálogo principal (lista)
   const [open, setOpen] = useState(false);
+  // Lista de personagens do usuário obtidos da API
   const [characters, setCharacters] = useState<Combatant[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Personagem selecionado e iniciativa informada antes de confirmar
   const [selectedCharacter, setSelectedCharacter] = useState<Combatant | null>(null);
   const [initiativeInput, setInitiativeInput] = useState('');
 
+  // Busca personagens do usuário autenticado, tratando sessão expirada
   const fetchCharacters = async () => {
     setLoading(true);
     setError('');
@@ -36,7 +42,7 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
         return;
       }
       const { characters: chars } = await apiRequest('/characters', {}, token);
-      // Filter out null/undefined values and ensure valid character structure
+      // Filtra nulos e garante presença de id e name
       const validChars = (chars || []).filter((c: any) => c && c.id && c.name);
       setCharacters(validChars);
       setLoading(false);
@@ -46,21 +52,24 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
     }
   };
 
+  // Ao abrir o diálogo principal, dispara a busca
   useEffect(() => {
     if (open) {
       fetchCharacters();
     }
   }, [open]);
 
+  // Seleciona personagem e prepara input de iniciativa
   const handleSelectCharacter = (character: Combatant) => {
     setSelectedCharacter(character);
-    setInitiativeInput('10'); // Default initiative
+    setInitiativeInput('10'); // valor padrão de iniciativa
   };
 
+  // Confirma seleção: remove id/userId para gerar novo id no combate, aplica iniciativa digitada
   const handleConfirm = () => {
     if (!selectedCharacter) return;
     
-    // Create a copy without the ID so it gets a new ID when added
+    // Cria cópia sem ID para receber novo ID ao adicionar
     const { id, userId, ...characterData } = selectedCharacter as any;
     onSelect({
       ...characterData,
@@ -71,6 +80,7 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
     setInitiativeInput('');
   };
 
+  // Cancelar seleção e limpar input
   const handleCancel = () => {
     setSelectedCharacter(null);
     setInitiativeInput('');
@@ -78,6 +88,7 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
 
   return (
     <>
+      {/* Diálogo principal: lista de personagens salvos */}
       <Dialog open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
         if (!isOpen) {
@@ -142,6 +153,7 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
                       </div>
                     </div>
 
+                    {/* Estatísticas principais do personagem salvo */}
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="flex items-center gap-2 text-slate-300">
                         <Heart className="w-4 h-4 text-red-400" />
@@ -168,7 +180,7 @@ export function SelectExistingCharacterDialog({ onSelect, triggerButton }: Selec
         </DialogContent>
       </Dialog>
 
-      {/* Initiative Input Dialog */}
+      {/* Diálogo secundário: solicitar iniciativa antes de adicionar */}
       <Dialog open={!!selectedCharacter} onOpenChange={(isOpen) => !isOpen && handleCancel()}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>

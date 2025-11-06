@@ -1,3 +1,5 @@
+// src/data/npc-templates.tsx — Comentários em PT-BR sem alterar a lógica original
+
 export interface NPCTemplate {
   name: string;
   initiative: number;
@@ -7,6 +9,7 @@ export interface NPCTemplate {
   category: 'common' | 'elite' | 'boss';
 }
 
+// Catálogo de NPCs para uso rápido na BibliotecaNPC
 export const npcTemplates: NPCTemplate[] = [
   // Common enemies
   {

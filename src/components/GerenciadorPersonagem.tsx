@@ -1,3 +1,5 @@
+// GerenciadorPersonagem.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { Card } from './ui/card';
@@ -16,6 +18,7 @@ export function GerenciadorPersonagem() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Busca personagens do usuário autenticado no backend (Edge Function)
   const fetchCharacters = async () => {
     try {
       const token = await getAccessToken();
@@ -28,7 +31,7 @@ export function GerenciadorPersonagem() {
       const response = await apiRequest('/characters', {}, token);
       console.log('Characters response:', response);
       const chars = response.characters;
-      // Filter out null/undefined values and ensure valid character structure
+      // Filtra itens inválidos (null/undefined) e exige campos essenciais
       const validChars = (chars || []).filter((c: any) => c && c.id && c.name);
       console.log('Valid characters:', validChars.length, validChars);
       setCharacters(validChars);
@@ -40,11 +43,13 @@ export function GerenciadorPersonagem() {
     }
   };
 
+  // Efeito: carrega lista após montar o componente
   useEffect(() => {
     console.log('CharacterManager mounted, fetching characters...');
     fetchCharacters();
   }, []);
 
+  // Criação de personagem persistindo no backend e atualizando estado local
   const addCharacter = async (character: Omit<Combatant, 'id'>) => {
     try {
       const token = await getAccessToken();
@@ -67,6 +72,7 @@ export function GerenciadorPersonagem() {
     }
   };
 
+  // Exclusão de personagem no backend seguida de atualização local
   const deleteCharacter = async (id: string) => {
     try {
       const token = await getAccessToken();
@@ -83,6 +89,7 @@ export function GerenciadorPersonagem() {
     }
   };
 
+  // Placeholder de carregamento enquanto lista é obtida
   if (loading) {
     return (
       <Card className="p-12 bg-slate-800/50 border-slate-700">
@@ -93,8 +100,10 @@ export function GerenciadorPersonagem() {
 
   return (
     <div className="space-y-6">
+      {/* Ferramentas de debug opcionais */}
       <DebugCharacters />
-      
+
+      {/* Cabeçalho da seção com ação de atualizar e criar personagem */}
       <Card className="p-4 bg-slate-800/50 border-slate-700">
         <div className="flex items-center justify-between">
           <h2 className="text-white flex items-center gap-2">
@@ -116,12 +125,14 @@ export function GerenciadorPersonagem() {
         </div>
       </Card>
 
+      {/* Exibição de erro se houver */}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
+      {/* Estado vazio com instrução de criação */}
       {characters.length === 0 ? (
         <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
           <div className="text-center text-slate-500">
@@ -131,6 +142,7 @@ export function GerenciadorPersonagem() {
           </div>
         </Card>
       ) : (
+        // Grid de cards de personagens com estatísticas principais
         <div className="grid gap-4 md:grid-cols-2">
           {characters.filter(c => c && c.id).map((character) => (
             <Card

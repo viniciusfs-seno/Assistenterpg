@@ -1,3 +1,5 @@
+// BibliotecaNPC.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
@@ -19,14 +21,16 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
   const [selectedNPC, setSelectedNPC] = useState<NPCTemplate | null>(null);
   const [initiativeInput, setInitiativeInput] = useState('');
 
+  // Seleciona um NPC e sugere a iniciativa do template
   const handleSelect = (npc: NPCTemplate) => {
     setSelectedNPC(npc);
-    setInitiativeInput(npc.initiative.toString()); // Use template initiative as default suggestion
+    setInitiativeInput(npc.initiative.toString()); // Sugestão inicial baseada no template
   };
 
+  // Confirma inclusão do NPC convertendo os campos necessários para Combatant parcial
   const handleConfirm = () => {
     if (!selectedNPC) return;
-    
+
     onSelectNPC({
       name: selectedNPC.name,
       initiative: parseInt(initiativeInput) || 10,
@@ -38,15 +42,18 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
     setInitiativeInput('');
   };
 
+  // Cancela seleção e limpa estado
   const handleCancel = () => {
     setSelectedNPC(null);
     setInitiativeInput('');
   };
 
+  // Agrupamentos por categoria para tabs
   const commonNPCs = npcTemplates.filter(npc => npc.category === 'common');
   const eliteNPCs = npcTemplates.filter(npc => npc.category === 'elite');
   const bossNPCs = npcTemplates.filter(npc => npc.category === 'boss');
 
+  // Card de um NPC mostrando descrição e estatísticas principais
   const NPCCard = ({ npc }: { npc: NPCTemplate }) => (
     <Card className="p-4 bg-slate-700/50 border-slate-600 hover:border-slate-500 transition-colors">
       <div className="space-y-3">
@@ -67,7 +74,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
             {npc.category === 'common' ? 'Comum' : npc.category === 'elite' ? 'Elite' : 'Boss'}
           </Badge>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="text-slate-300">
             <span className="text-slate-500">Vida:</span> {npc.maxHealth}
@@ -91,6 +98,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
 
   return (
     <>
+      {/* Diálogo principal: lista de NPCs */}
       <Dialog open={open} onOpenChange={(isOpen: boolean | ((prevState: boolean) => boolean)) => {
         setOpen(isOpen);
         if (!isOpen) {
@@ -112,6 +120,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Tabs por categoria */}
           <Tabs defaultValue="common" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="common">Comuns</TabsTrigger>
@@ -152,7 +161,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Initiative Input Dialog */}
+      {/* Diálogo secundário: pedir iniciativa ao confirmar NPC */}
       <Dialog open={!!selectedNPC} onOpenChange={(isOpen: any) => !isOpen && handleCancel()}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
@@ -161,7 +170,7 @@ export function NPCLibrary({ onSelectNPC }: NPCLibraryProps) {
               Informe o valor de iniciativa para {selectedNPC?.name}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="initiative">Iniciativa</Label>

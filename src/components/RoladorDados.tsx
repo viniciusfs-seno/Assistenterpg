@@ -1,3 +1,5 @@
+// RoladorDados.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -12,11 +14,12 @@ export function DiceRoller({ onRoll }: DiceRollerProps) {
   const [result, setResult] = useState<number | null>(null);
   const [rolling, setRolling] = useState(false);
 
+  // Simula a rolagem de 1d20 com pequena animação e emite o resultado
   const rollDice = () => {
     setRolling(true);
     setResult(null);
 
-    // Simulate rolling animation
+    // Delay para animar e depois sortear o valor final
     setTimeout(() => {
       const rolled = Math.floor(Math.random() * 20) + 1;
       setResult(rolled);

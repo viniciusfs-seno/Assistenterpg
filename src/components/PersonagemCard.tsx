@@ -1,3 +1,5 @@
+// PersonagemCard.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -40,19 +42,23 @@ export function CombatantCard({
   isDM = false,
   isOwner = false,
 }: CombatantCardProps) {
+  // Flags de edição inline por atributo
   const [editingHealth, setEditingHealth] = useState(false);
   const [editingStamina, setEditingStamina] = useState(false);
   const [editingCursed, setEditingCursed] = useState(false);
   const [editingSanity, setEditingSanity] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState(false);
+  // Valores temporários para inputs (se utilizados)
   const [healthValue, setHealthValue] = useState(combatant.health);
   const [staminaValue, setStaminaValue] = useState(combatant.stamina);
   const [cursedValue, setCursedValue] = useState(combatant.cursedEnergy ?? 0);
   const [sanityValue, setSanityValue] = useState(combatant.sanity ?? 100);
   const [initiativeValue, setInitiativeValue] = useState(combatant.initiative);
 
+  // Permissão de edição: DM ou dono do personagem
   const canEdit = isDM || isOwner;
 
+  // Ajustes incrementais com clamps para evitar ultrapassar limites
   const adjust = (field: 'health' | 'stamina' | 'cursed' | 'sanity', amount: number) => {
     if (field === 'health') {
       const newHealth = Math.max(0, Math.min(combatant.maxHealth, combatant.health + amount));
@@ -69,11 +75,13 @@ export function CombatantCard({
     }
   };
 
+  // Percentuais para barras de progresso, com defaults seguros
   const healthPercent = combatant.maxHealth > 0 ? (combatant.health / combatant.maxHealth) * 100 : 0;
   const staminaPercent = combatant.maxStamina > 0 ? (combatant.stamina / combatant.maxStamina) * 100 : 0;
   const cursedPercent = (combatant.maxCursedEnergy && combatant.maxCursedEnergy > 0) ? ((combatant.cursedEnergy || 0) / combatant.maxCursedEnergy) * 100 : 0;
   const sanityPercent = (combatant.maxSanity && combatant.maxSanity > 0) ? ((combatant.sanity || 100) / combatant.maxSanity) * 100 : 100;
 
+  // Cor dinâmica da barra de vida (verde >60%, amarelo >30%, vermelho <=30%)
   const getHealthColor = () => {
     if (healthPercent > 60) return "bg-green-500";
     if (healthPercent > 30) return "bg-yellow-500";
@@ -96,9 +104,10 @@ export function CombatantCard({
       }`}
     >
       <div className="space-y-4">
-        {/* Header */}
+        {/* Cabeçalho com iniciativa e badges */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 flex-1">
+            {/* Iniciativa com edição inline (apenas DM) */}
             <div className="relative group">
               {editingInitiative ? (
                 <div className="flex items-center gap-1">
@@ -142,6 +151,7 @@ export function CombatantCard({
                 </div>
               )}
             </div>
+            {/* Nome + badges de tipo e status de turno/vida */}
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className={`text-white ${isDeceased ? "line-through" : ""}`}>{combatant.name}</h3>
@@ -157,6 +167,7 @@ export function CombatantCard({
             </div>
           </div>
 
+          {/* Remoção (apenas DM) */}
           <div className="flex items-center gap-2">
             { (isDM) && (
               <Button size="sm" variant="ghost" onClick={() => onRemove(combatant.id)} className="text-slate-400 hover:text-red-400 hover:bg-slate-700">
@@ -166,7 +177,7 @@ export function CombatantCard({
           </div>
         </div>
 
-        {/* Health */}
+        {/* Vida */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -177,14 +188,14 @@ export function CombatantCard({
           </div>
           <Progress value={healthPercent} className="h-2 bg-slate-700" indicatorClassName={getHealthColor()} />
 
-          {/* Revive button - only DM */}
+          {/* Reviver (apenas DM, quando caído mas não morto definitivo) */}
           {isDM && isDead && !isDeceased && onRevive && (
             <Button size="sm" onClick={() => onRevive(combatant.id)} className="w-full bg-green-700 hover:bg-green-600 mt-2">
               <HeartPulse className="w-4 h-4 mr-2" /> Reviver (1 HP)
             </Button>
           )}
 
-          {/* edit controls allow DM or Owner */}
+          {/* Botões rápidos de ajuste (vida) — apenas quem pode editar */}
           {canEdit && !isDeceased && (
             <div className="flex gap-2 mt-2">
               <Button size="sm" variant="outline" onClick={() => adjust('health', -5)} className="flex-1 border-slate-600">-5</Button>
@@ -195,7 +206,7 @@ export function CombatantCard({
           )}
         </div>
 
-        {/* Stamina */}
+        {/* Esforço */}
         {!isDeceased && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -217,7 +228,7 @@ export function CombatantCard({
           </div>
         )}
 
-        {/* Cursed Energy (Energia Amaldiçoada) */}
+        {/* Energia Amaldiçoada */}
         {!isDeceased && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -239,7 +250,7 @@ export function CombatantCard({
           </div>
         )}
 
-        {/* Sanity (Sanidade) */}
+        {/* Sanidade */}
         {!isDeceased && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -261,7 +272,7 @@ export function CombatantCard({
           </div>
         )}
 
-        {/* Status */}
+        {/* Badge de status agregado */}
         <div className="mt-2">
           {combatant.isDeceased ? (
             <Badge className="bg-red-600">Morto</Badge>

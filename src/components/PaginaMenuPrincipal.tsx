@@ -1,3 +1,5 @@
+// PaginaMenuPrincipal.tsx — Comentários em PT-BR sem alterar a lógica original
+
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { GerenciadorSala } from './GerenciadorSala';
@@ -15,10 +17,11 @@ interface MainMenuProps {
 export function PaginaMenuPrincipal({ onJoinRoom }: MainMenuProps) {
   const { user, signOut } = useAuth();
 
+  // Layout principal com abas e cabeçalho mostrando usuário autenticado
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Header com identidade do app e sessão */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -45,7 +48,7 @@ export function PaginaMenuPrincipal({ onJoinRoom }: MainMenuProps) {
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Conteúdo principal com abas de navegação */}
         <div className="max-w-6xl mx-auto">
           <Tabs defaultValue="rooms" className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -63,14 +66,17 @@ export function PaginaMenuPrincipal({ onJoinRoom }: MainMenuProps) {
               </TabsTrigger>
             </TabsList>
 
+            {/* Abas: Salas (online) */}
             <TabsContent value="rooms">
               <GerenciadorSala onJoinRoom={onJoinRoom} />
             </TabsContent>
 
+            {/* Abas: Personagens (CRUD) */}
             <TabsContent value="characters">
               <GerenciadorPersonagem />
             </TabsContent>
 
+            {/* Abas: Combate local (sem sincronização com sala) */}
             <TabsContent value="local">
               <Card className="p-6 bg-slate-800/50 border-slate-700 mb-6">
                 <div className="text-center">

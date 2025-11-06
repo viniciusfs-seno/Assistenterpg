@@ -1,3 +1,5 @@
+// AuthContext.tsx — Comentários em PT-BR adicionados sem alterar a lógica
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { createClient } from '../utils/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -19,13 +21,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
-    // Check active session
+    // Bootstrap: tenta recuperar sessão ativa ao montar o provider
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listener: atualiza estado local ao ocorrerem mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null);
@@ -35,33 +37,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Login por email/senha, retorna access_token para chamadas ao backend
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    
     if (error) throw error;
     setUser(data.user);
     return data.session.access_token;
   };
 
+  // Signup via função serverless (Hono) e em seguida realiza signIn
   const signUp = async (email: string, password: string, name: string) => {
     const { apiRequest } = await import('../utils/api');
     await apiRequest('/signup', {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
     });
-    
-    // Now sign in
     await signIn(email, password);
   };
 
+  // Logout no Supabase e limpeza do estado local
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
   };
 
+  // Recupera o access_token atual (ou null se não houver sessão)
   const getAccessToken = async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) {
@@ -84,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook de conveniência que exige uso dentro de AuthProvider
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
