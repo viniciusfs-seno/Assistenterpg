@@ -8,7 +8,6 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Users, Trash2, Heart, Zap, Sparkles, Brain } from 'lucide-react';
 import { AddCombatantDialog } from './AddPersonagemDialog';
-import { DebugCharacters } from './DebugPersonagens';
 import { apiRequest } from '../utils/api';
 import type { Combatant } from './TrackerCombate';
 
@@ -100,8 +99,6 @@ export function GerenciadorPersonagem() {
 
   return (
     <div className="space-y-6">
-      {/* Ferramentas de debug opcionais */}
-      <DebugCharacters />
 
       {/* Cabeçalho da seção com ação de atualizar e criar personagem */}
       <Card className="p-4 bg-slate-800/50 border-slate-700">
