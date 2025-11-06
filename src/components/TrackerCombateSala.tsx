@@ -62,8 +62,7 @@ export function TrackerCombateSala({
   const [combatStarted, setCombatStarted] = useState(false);
   const [round, setRound] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [showCombatReport, setShowCombatReport] =
-    useState(false);
+  const [showCombatReport, setShowCombatReport] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showReportsList, setShowReportsList] = useState(false);
   const [selectedReport, setSelectedReport] = useState<any>(null);
@@ -77,6 +76,10 @@ export function TrackerCombateSala({
       }
     },
   );
+  
+  // Estados para o relatório do jogador
+  const [showPlayerReport, setShowPlayerReport] = useState(false);
+  const [playerReportData, setPlayerReportData] = useState<any>(null);
 
   const sortedCombatants = [...combatants].sort(
     (a, b) => b.initiative - a.initiative,
@@ -144,13 +147,53 @@ export function TrackerCombateSala({
     }
   };
 
+  // Função para detectar fim de combate para jogadores
+  const checkForCombatEnd = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const { room } = await apiRequest(
+        `/rooms/${roomCode}`,
+        {},
+        token,
+      ) as RoomResponse;
+
+      // Se combate estava ativo mas agora parou
+      if (combatStarted && !room.combatStarted && playerCombatant) {
+        // Gera relatório específico do jogador
+        const playerStats = room.combatants.find(
+          (c: Combatant) => c.id === playerCombatant.id
+        );
+
+        if (playerStats) {
+          setPlayerReportData({
+            character: playerStats,
+            roundEnded: room.round,
+            timestamp: new Date().toISOString()
+          });
+          setShowPlayerReport(true);
+          setCombatStarted(false);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to check combat end:", err);
+    }
+  };
+
   useEffect(() => {
     fetchRoom();
     const interval = setInterval(() => {
-      if (!isSyncing) fetchRoom();
+      if (!isSyncing) {
+        fetchRoom();
+        
+        // Verifica se o combate acabou para jogadores
+        if (!isDM && combatStarted && playerCombatant) {
+          checkForCombatEnd();
+        }
+      }
     }, 2000);
     return () => clearInterval(interval);
-  }, [roomCode, isSyncing]);
+  }, [roomCode, isSyncing, combatStarted, isDM, playerCombatant]);
 
   const addCombatant = async (
     combatant: Omit<Combatant, "id">,
@@ -537,41 +580,139 @@ export function TrackerCombateSala({
                   Ordem de Iniciativa
                 </h4>
                 <div className="space-y-2">
-                  {sortedCombatants.map((c, idx) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between p-2 rounded bg-slate-700/50"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-300 text-sm">
-                          {idx + 1}.
-                        </span>
-                        <span className="text-white">
-                          {c.name}
-                        </span>
+                  {sortedCombatants.map((c, idx) => {
+                    const isCurrentTurn = activeCombatants[currentTurnIndex]?.id === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        className={`flex items-center justify-between p-2 rounded transition-all ${
+                          isCurrentTurn
+                            ? 'bg-blue-600/40 border-2 border-blue-500 shadow-lg shadow-blue-500/20'
+                            : 'bg-slate-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-300 text-sm">
+                            {idx + 1}.
+                          </span>
+                          <span className={`${isCurrentTurn ? 'text-white font-bold' : 'text-white'}`}>
+                            {c.name}
+                          </span>
+                          {isCurrentTurn && (
+                            <Badge className="bg-yellow-600 ml-2">
+                              Turno Atual
+                            </Badge>
+                          )}
+                        </div>
+                        <div>
+                          {c.isDeceased ? (
+                            <Badge className="bg-red-600">
+                              Morto
+                            </Badge>
+                          ) : c.health === 0 ? (
+                            <Badge className="bg-orange-600">
+                              Caído
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-green-600">
+                              Vivo
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        {c.isDeceased ? (
-                          <Badge className="bg-red-600">
-                            Morto
-                          </Badge>
-                        ) : c.health === 0 ? (
-                          <Badge className="bg-orange-600">
-                            Caído
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-green-600">
-                            Vivo
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             )}
           </div>
         )}
+
+        {/* Player Combat End Report */}
+        <Dialog open={showPlayerReport} onOpenChange={setShowPlayerReport}>
+          <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-2xl flex items-center gap-2">
+                <Flag className="w-6 h-6 text-green-400" />
+                Combate Finalizado!
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Resumo da sua performance
+              </DialogDescription>
+            </DialogHeader>
+
+            {playerReportData && (
+              <div className="space-y-6 p-4">
+                <Alert className="bg-blue-900/30 border-blue-700">
+                  <AlertDescription className="text-center">
+                    <div className="text-lg font-bold text-white mb-1">
+                      {playerReportData.character.name}
+                    </div>
+                    <div className="text-sm text-slate-300">
+                      Sobreviveu até o Round {playerReportData.roundEnded}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+
+                <Card className="p-4 bg-slate-700/50 border-slate-600">
+                  <h4 className="text-white font-semibold mb-3">Estatísticas Finais</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-slate-400 text-sm">HP Final</div>
+                      <div className="text-white text-lg font-bold">
+                        {playerReportData.character.health} / {playerReportData.character.maxHealth}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-sm">Status</div>
+                      <div>
+                        {playerReportData.character.isDeceased ? (
+                          <Badge className="bg-red-600">Morto</Badge>
+                        ) : playerReportData.character.health === 0 ? (
+                          <Badge className="bg-orange-600">Caído</Badge>
+                        ) : (
+                          <Badge className="bg-green-600">Vivo</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-sm">Dano Recebido</div>
+                      <div className="text-red-400 text-lg font-bold">
+                        {playerReportData.character.damageTaken || 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-sm">Vezes Caído</div>
+                      <div className="text-orange-400 text-lg font-bold">
+                        {playerReportData.character.timesFallen || 0}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {playerReportData.character.isDeceased && (
+                  <Alert variant="destructive" className="bg-red-900/20 border-red-700">
+                    <AlertDescription className="text-center">
+                      Seu personagem morreu durante o combate
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 p-4">
+              <Button
+                onClick={() => {
+                  setShowPlayerReport(false);
+                  setPlayerReportData(null);
+                }}
+                className="bg-green-700 hover:bg-green-600"
+              >
+                Entendido
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

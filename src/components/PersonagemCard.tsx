@@ -1,4 +1,4 @@
-// PersonagemCard.tsx — Comentários em PT-BR sem alterar a lógica original
+// PersonagemCard.tsx 
 
 import { useState } from 'react';
 import { Card } from './ui/card';
@@ -31,7 +31,7 @@ interface CombatantCardProps {
   onRemove: (id: string) => void;
   onRevive?: (id: string) => void;
   isDM?: boolean;
-  isOwner?: boolean; // jogador dono do personagem
+  isOwner?: boolean;
 }
 
 export function CombatantCard({
@@ -43,46 +43,61 @@ export function CombatantCard({
   isDM = false,
   isOwner = false,
 }: CombatantCardProps) {
-  // Flags de edição inline por atributo
-  const [editingHealth, setEditingHealth] = useState(false);
-  const [editingStamina, setEditingStamina] = useState(false);
-  const [editingCursed, setEditingCursed] = useState(false);
-  const [editingSanity, setEditingSanity] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState(false);
-  // Valores temporários para inputs (se utilizados)
-  const [healthValue, setHealthValue] = useState(combatant.health);
-  const [staminaValue, setStaminaValue] = useState(combatant.stamina);
-  const [cursedValue, setCursedValue] = useState(combatant.cursedEnergy ?? 0);
-  const [sanityValue, setSanityValue] = useState(combatant.sanity ?? 100);
   const [initiativeValue, setInitiativeValue] = useState(combatant.initiative);
+  
+  // Estados para os inputs customizados de cada atributo
+  const [healthCustom, setHealthCustom] = useState('');
+  const [staminaCustom, setStaminaCustom] = useState('');
+  const [cursedCustom, setCursedCustom] = useState('');
+  const [sanityCustom, setSanityCustom] = useState('');
 
-  // Permissão de edição: DM ou dono do personagem
   const canEdit = isDM || isOwner;
 
-  // Ajustes incrementais com clamps para evitar ultrapassar limites
+  // Função de ajuste CORRIGIDA - especialmente para sanidade
   const adjust = (field: 'health' | 'stamina' | 'cursed' | 'sanity', amount: number) => {
-    if (field === 'health') {
-      const newHealth = Math.max(0, Math.min(combatant.maxHealth, combatant.health + amount));
-      onUpdate(combatant.id, { health: newHealth });
-    } else if (field === 'stamina') {
-      const newStamina = Math.max(0, Math.min(combatant.maxStamina, combatant.stamina + amount));
-      onUpdate(combatant.id, { stamina: newStamina });
-    } else if (field === 'cursed') {
-      const newCursed = Math.max(0, Math.min(combatant.maxCursedEnergy ?? (combatant.cursedEnergy || 0), (combatant.cursedEnergy || 0) + amount));
-      onUpdate(combatant.id, { cursedEnergy: newCursed });
-    } else {
-      const newSanity = Math.max(0, Math.min(combatant.maxSanity ?? (combatant.sanity || 100), (combatant.sanity || 100) + amount));
-      onUpdate(combatant.id, { sanity: newSanity });
-    }
+  if (field === 'health') {
+    // Remove Math.min para permitir ultrapassar maxHealth
+    const newHealth = Math.max(0, combatant.health + amount);
+    onUpdate(combatant.id, { health: newHealth });
+  } else if (field === 'stamina') {
+    const newStamina = Math.max(0, combatant.stamina + amount);
+    onUpdate(combatant.id, { stamina: newStamina });
+  } else if (field === 'cursed') {
+    const currentCursed = combatant.cursedEnergy ?? 0;
+    const newCursed = Math.max(0, currentCursed + amount);
+    onUpdate(combatant.id, { cursedEnergy: newCursed });
+  } else if (field === 'sanity') {
+    const currentSanity = combatant.sanity ?? 100;
+    const newSanity = Math.max(0, currentSanity + amount);
+    onUpdate(combatant.id, { sanity: newSanity });
+  }
+};
+
+
+  // Função para aplicar valor customizado dos inputs
+  const applyCustomValue = (field: 'health' | 'stamina' | 'cursed' | 'sanity', value: string) => {
+    if (!value.trim()) return;
+    
+    // Remove espaços e converte para número
+    const numValue = parseInt(value);
+    if (isNaN(numValue)) return;
+    
+    adjust(field, numValue);
+    
+    // Limpa o input após aplicar
+    if (field === 'health') setHealthCustom('');
+    else if (field === 'stamina') setStaminaCustom('');
+    else if (field === 'cursed') setCursedCustom('');
+    else if (field === 'sanity') setSanityCustom('');
   };
 
-  // Percentuais para barras de progresso, com defaults seguros
-  const healthPercent = combatant.maxHealth > 0 ? (combatant.health / combatant.maxHealth) * 100 : 0;
-  const staminaPercent = combatant.maxStamina > 0 ? (combatant.stamina / combatant.maxStamina) * 100 : 0;
-  const cursedPercent = (combatant.maxCursedEnergy && combatant.maxCursedEnergy > 0) ? ((combatant.cursedEnergy || 0) / combatant.maxCursedEnergy) * 100 : 0;
-  const sanityPercent = (combatant.maxSanity && combatant.maxSanity > 0) ? ((combatant.sanity || 100) / combatant.maxSanity) * 100 : 100;
+  const healthPercent = Math.min(100, combatant.maxHealth > 0 ? ((combatant.health ?? 0) / combatant.maxHealth) * 100 : 0);
+  const staminaPercent = Math.min(100, combatant.maxStamina > 0 ? ((combatant.stamina ?? 0) / combatant.maxStamina) * 100 : 0);
+  const cursedPercent = Math.min(100, combatant.maxCursedEnergy > 0 ? ((combatant.cursedEnergy ?? 0) / combatant.maxCursedEnergy) * 100 : 0);
+  const sanityPercent = Math.min(100, combatant.maxSanity > 0 ? ((combatant.sanity ?? 100) / combatant.maxSanity) * 100 : 100);
 
-  // Cor dinâmica da barra de vida (verde >60%, amarelo >30%, vermelho <=30%)
+
   const getHealthColor = () => {
     if (healthPercent > 60) return "bg-green-500";
     if (healthPercent > 30) return "bg-yellow-500";
@@ -108,7 +123,6 @@ export function CombatantCard({
         {/* Cabeçalho com iniciativa e badges */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 flex-1">
-            {/* Iniciativa com edição inline (apenas DM) */}
             <div className="relative group">
               {editingInitiative ? (
                 <div className="flex items-center gap-1">
@@ -152,7 +166,6 @@ export function CombatantCard({
                 </div>
               )}
             </div>
-            {/* Nome + badges de tipo e status de turno/vida */}
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className={`text-white ${isDeceased ? "line-through" : ""}`}>{combatant.name}</h3>
@@ -168,9 +181,8 @@ export function CombatantCard({
             </div>
           </div>
 
-          {/* Remoção (apenas DM) */}
           <div className="flex items-center gap-2">
-            { (isDM) && (
+            {isDM && (
               <Button size="sm" variant="ghost" onClick={() => onRemove(combatant.id)} className="text-slate-400 hover:text-red-400 hover:bg-slate-700">
                 <X className="w-4 h-4" />
               </Button>
@@ -178,100 +190,245 @@ export function CombatantCard({
           </div>
         </div>
 
-        {/* Vida */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-slate-300">
-              <Heart className="w-4 h-4 text-red-400" />
-              <span>Vida</span>
+        {/* Grid com 2 colunas para os atributos */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Coluna 1, Linha 1: Vida */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <Heart className="w-4 h-4 text-red-400" />
+                <span>Vida</span>
+              </div>
+              <span className="text-sm text-slate-300">{combatant.health} / {combatant.maxHealth}</span>
             </div>
-            <span className="text-sm text-slate-300">{combatant.health} / {combatant.maxHealth}</span>
+            <Progress value={healthPercent} className="h-2 bg-slate-700" indicatorClassName={getHealthColor()} />
+            
+            {isDM && isDead && !isDeceased && onRevive && (
+              <Button size="sm" onClick={() => onRevive(combatant.id)} className="w-full bg-green-700 hover:bg-green-600 mt-2">
+                <HeartPulse className="w-4 h-4 mr-2" /> Reviver (1 HP)
+              </Button>
+            )}
+            
+            {canEdit && !isDeceased && (
+              <div className="space-y-1 mt-2">
+                <div className="flex gap-1">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => adjust('health', -1)} 
+                    className="flex-1 border-slate-600"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => adjust('health', 1)} 
+                    className="flex-1 border-slate-600"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                </div>
+                <div className="flex gap-1">
+                  <Input
+                    type="text"
+                    value={healthCustom}
+                    onChange={(e) => setHealthCustom(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        applyCustomValue('health', healthCustom);
+                      }
+                    }}
+                    placeholder="+5 ou -3"
+                    className="flex-1 h-8 text-xs bg-slate-700 border-slate-600 text-white text-center"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => applyCustomValue('health', healthCustom)}
+                    className="border-slate-600"
+                  >
+                    <Check className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-          <Progress value={healthPercent} className="h-2 bg-slate-700" indicatorClassName={getHealthColor()} />
 
-          {/* Reviver (apenas DM, quando caído mas não morto definitivo) */}
-          {isDM && isDead && !isDeceased && onRevive && (
-            <Button size="sm" onClick={() => onRevive(combatant.id)} className="w-full bg-green-700 hover:bg-green-600 mt-2">
-              <HeartPulse className="w-4 h-4 mr-2" /> Reviver (1 HP)
-            </Button>
+          {/* Coluna 2, Linha 1: Sanidade */}
+          {!isDeceased && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <Brain className="w-4 h-4 text-cyan-400" />
+                  <span>Sanidade</span>
+                </div>
+                <span className="text-sm text-slate-300">{combatant.sanity ?? 100} / {combatant.maxSanity ?? 100}</span>
+              </div>
+              <Progress value={sanityPercent} className="h-2 bg-slate-700" indicatorClassName="bg-cyan-500" />
+              {canEdit && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('sanity', -1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('sanity', 1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-1">
+                    <Input
+                      type="text"
+                      value={sanityCustom}
+                      onChange={(e) => setSanityCustom(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          applyCustomValue('sanity', sanityCustom);
+                        }
+                      }}
+                      placeholder="+5 ou -3"
+                      className="flex-1 h-8 text-xs bg-slate-700 border-slate-600 text-white text-center"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyCustomValue('sanity', sanityCustom)}
+                      className="border-slate-600"
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Botões rápidos de ajuste (vida) — apenas quem pode editar */}
-          {canEdit && !isDeceased && (
-            <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={() => adjust('health', -5)} className="flex-1 border-slate-600">-5</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('health', -1)} className="flex-1 border-slate-600">-1</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('health', 1)} className="flex-1 border-slate-600">+1</Button>
-              <Button size="sm" variant="outline" onClick={() => adjust('health', 5)} className="flex-1 border-slate-600">+5</Button>
+          {/* Coluna 1, Linha 2: Esforço */}
+          {!isDeceased && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <Zap className="w-4 h-4 text-yellow-400" />
+                  <span>Esforço</span>
+                </div>
+                <span className="text-sm text-slate-300">{combatant.stamina} / {combatant.maxStamina}</span>
+              </div>
+              <Progress value={staminaPercent} className="h-2 bg-slate-700" indicatorClassName="bg-yellow-500" />
+              {canEdit && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('stamina', -1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('stamina', 1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-1">
+                    <Input
+                      type="text"
+                      value={staminaCustom}
+                      onChange={(e) => setStaminaCustom(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          applyCustomValue('stamina', staminaCustom);
+                        }
+                      }}
+                      placeholder="+5 ou -3"
+                      className="flex-1 h-8 text-xs bg-slate-700 border-slate-600 text-white text-center"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyCustomValue('stamina', staminaCustom)}
+                      className="border-slate-600"
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Coluna 2, Linha 2: Energia Amaldiçoada */}
+          {!isDeceased && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span>Energia Amaldiçoada</span>
+                </div>
+                <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>
+              </div>
+              <Progress value={cursedPercent} className="h-2 bg-slate-700" indicatorClassName="bg-purple-600" />
+              {canEdit && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('cursed', -1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => adjust('cursed', 1)} 
+                      className="flex-1 border-slate-600"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-1">
+                    <Input
+                      type="text"
+                      value={cursedCustom}
+                      onChange={(e) => setCursedCustom(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          applyCustomValue('cursed', cursedCustom);
+                        }
+                      }}
+                      placeholder="+5 ou -3"
+                      className="flex-1 h-8 text-xs bg-slate-700 border-slate-600 text-white text-center"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyCustomValue('cursed', cursedCustom)}
+                      className="border-slate-600"
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Esforço */}
-        {!isDeceased && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-300">
-                <Zap className="w-4 h-4 text-yellow-400" />
-                <span>Esforço</span>
-              </div>
-              <span className="text-sm text-slate-300">{combatant.stamina} / {combatant.maxStamina}</span>
-            </div>
-            <Progress value={staminaPercent} className="h-2 bg-slate-700" indicatorClassName="bg-yellow-500" />
-            {canEdit && (
-              <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" onClick={() => adjust('stamina', -5)} className="flex-1 border-slate-600">-5</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('stamina', -1)} className="flex-1 border-slate-600">-1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('stamina', 1)} className="flex-1 border-slate-600">+1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('stamina', 5)} className="flex-1 border-slate-600">+5</Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Energia Amaldiçoada */}
-        {!isDeceased && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-300">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <span>Energia Amaldiçoada</span>
-              </div>
-              <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>
-            </div>
-            <Progress value={cursedPercent} className="h-2 bg-slate-700" indicatorClassName="bg-purple-600" />
-            {canEdit && (
-              <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" onClick={() => adjust('cursed', -5)} className="flex-1 border-slate-600">-5</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('cursed', -1)} className="flex-1 border-slate-600">-1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('cursed', 1)} className="flex-1 border-slate-600">+1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('cursed', 5)} className="flex-1 border-slate-600">+5</Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Sanidade */}
-        {!isDeceased && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-300">
-                <Brain className="w-4 h-4 text-cyan-400" />
-                <span>Sanidade</span>
-              </div>
-              <span className="text-sm text-slate-300">{combatant.sanity ?? 100} / {combatant.maxSanity ?? 100}</span>
-            </div>
-            <Progress value={sanityPercent} className="h-2 bg-slate-700" indicatorClassName="bg-cyan-500" />
-            {canEdit && (
-              <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" onClick={() => adjust('sanity', -5)} className="flex-1 border-slate-600">-5</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('sanity', -1)} className="flex-1 border-slate-600">-1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('sanity', 1)} className="flex-1 border-slate-600">+1</Button>
-                <Button size="sm" variant="outline" onClick={() => adjust('sanity', 5)} className="flex-1 border-slate-600">+5</Button>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Badge de status agregado */}
         <div className="mt-2">
