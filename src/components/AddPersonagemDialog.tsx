@@ -11,9 +11,12 @@ import { Combatant } from './TrackerCombate';
 
 interface AddCombatantDialogProps {
   onAdd: (combatant: Omit<Combatant, 'id'>) => void;
+  showInitiative?: boolean;
+  showSaveToggle?: boolean;
+  onSaveCharacter?: (combatant: Omit<Combatant, 'id'>) => void;
 }
 
-export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
+export function AddCombatantDialog({ onAdd, showInitiative = true, showSaveToggle = false, onSaveCharacter }: AddCombatantDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [initiative, setInitiative] = useState('10');
@@ -22,18 +25,19 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
   const [maxCursedEnergy, setMaxCursedEnergy] = useState('0');
   const [maxSanity, setMaxSanity] = useState('100');
   const [isPlayer, setIsPlayer] = useState(true);
+  const [saveCharacter, setSaveCharacter] = useState(false);
 
   // Envia dados validados ao callback e reseta o diálogo
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const initiativeNum = parseInt(initiative) || 10;
-    const healthNum = parseInt(maxHealth) || 50;
-    const staminaNum = parseInt(maxStamina) || 20;
-    const cursedEnergyNum = parseInt(maxCursedEnergy) || 0;
-    const sanityNum = parseInt(maxSanity) || 100;
+    const healthNum = Math.min(parseInt(maxHealth) || 50, 2000);
+    const staminaNum = Math.min(parseInt(maxStamina) || 20, 2000);
+    const cursedEnergyNum = Math.min(parseInt(maxCursedEnergy) || 0, 2000);
+    const sanityNum = Math.min(parseInt(maxSanity) || 100, 2000);
 
-    onAdd({
+    const characterData = {
       name: name.trim() || 'Unnamed',
       initiative: initiativeNum,
       health: healthNum,
@@ -45,7 +49,14 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
       sanity: sanityNum,
       maxSanity: sanityNum,
       isPlayer,
-    });
+    };
+
+    onAdd(characterData);
+
+    // If save toggle is enabled and checked, also save to character list
+    if (showSaveToggle && saveCharacter && onSaveCharacter) {
+      onSaveCharacter(characterData);
+    }
 
     // Reseta o formulário e fecha o diálogo
     setName('');
@@ -55,6 +66,7 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
     setMaxCursedEnergy('0');
     setMaxSanity('100');
     setIsPlayer(true);
+    setSaveCharacter(false);
     setOpen(false);
   };
 
@@ -88,17 +100,19 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
             </div>
 
             {/* Campo: Iniciativa */}
-            <div className="space-y-2">
-              <Label htmlFor="initiative">Iniciativa</Label>
-              <Input
-                id="initiative"
-                type="number"
-                value={initiative}
-                onChange={(e) => setInitiative(e.target.value)}
-                placeholder="10"
-                className="bg-slate-700 border-slate-600 text-white"
-              />
-            </div>
+            {showInitiative && (
+              <div className="space-y-2">
+                <Label htmlFor="initiative">Iniciativa</Label>
+                <Input
+                  id="initiative"
+                  type="number"
+                  value={initiative}
+                  onChange={(e) => setInitiative(e.target.value)}
+                  placeholder="10"
+                  className="bg-slate-700 border-slate-600 text-white"
+                />
+              </div>
+            )}
 
             {/* Campos: Vida / Esforço / Energia / Sanidade */}
             <div className="grid grid-cols-2 gap-4">
@@ -107,6 +121,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                 <Input
                   id="health"
                   type="number"
+                  min="1"
+                  max="2000"
                   value={maxHealth}
                   onChange={(e) => setMaxHealth(e.target.value)}
                   placeholder="50"
@@ -119,6 +135,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                 <Input
                   id="stamina"
                   type="number"
+                  min="0"
+                  max="2000"
                   value={maxStamina}
                   onChange={(e) => setMaxStamina(e.target.value)}
                   placeholder="20"
@@ -131,6 +149,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                 <Input
                   id="cursedEnergy"
                   type="number"
+                  min="0"
+                  max="2000"
                   value={maxCursedEnergy}
                   onChange={(e) => setMaxCursedEnergy(e.target.value)}
                   placeholder="0"
@@ -143,6 +163,8 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                 <Input
                   id="sanity"
                   type="number"
+                  min="0"
+                  max="2000"
                   value={maxSanity}
                   onChange={(e) => setMaxSanity(e.target.value)}
                   placeholder="100"
@@ -165,6 +187,23 @@ export function AddCombatantDialog({ onAdd }: AddCombatantDialogProps) {
                 onCheckedChange={setIsPlayer}
               />
             </div>
+
+            {/* Toggle: Save Character */}
+            {showSaveToggle && (
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="save-toggle">Salvar Personagem</Label>
+                  <p className="text-sm text-slate-400">
+                    Salvar este personagem na sua lista para uso futuro
+                  </p>
+                </div>
+                <Switch
+                  id="save-toggle"
+                  checked={saveCharacter}
+                  onCheckedChange={setSaveCharacter}
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>

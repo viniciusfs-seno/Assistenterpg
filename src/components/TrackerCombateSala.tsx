@@ -155,6 +155,17 @@ export function TrackerCombateSala({
   const addCombatant = async (
     combatant: Omit<Combatant, "id">,
   ) => {
+    // Limit players to 1 character
+    if (!isDM) {
+      const playerHasCharacter = combatants.some(
+        (c) => c.id.startsWith(`player_${user?.id}`)
+      );
+      if (playerHasCharacter) {
+        alert('Você já tem um personagem nesta sala. Apenas o mestre pode adicionar múltiplos personagens.');
+        return;
+      }
+    }
+
     const newCombatant = {
       ...combatant,
       id: `${isDM ? "npc" : `player_${user?.id}`}_${Date.now()}`,
@@ -169,6 +180,20 @@ export function TrackerCombateSala({
     const updatedCombatants = [...combatants, newCombatant];
     setCombatants(updatedCombatants);
     await updateRoom({ combatants: updatedCombatants });
+  };
+
+  const saveCharacterToList = async (combatant: Omit<Combatant, 'id'>) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await apiRequest('/characters', {
+        method: 'POST',
+        body: JSON.stringify(combatant),
+      }, token);
+      console.log('Character saved to list');
+    } catch (err) {
+      console.error('Failed to save character:', err);
+    }
   };
 
   const handleSelectNPC = (
@@ -475,7 +500,11 @@ export function TrackerCombateSala({
                 <p>Você ainda não adicionou seu personagem</p>
               </div>
               <div className="flex gap-2 justify-center">
-                <AddCombatantDialog onAdd={addCombatant} />
+                <AddCombatantDialog 
+                  onAdd={addCombatant}
+                  showSaveToggle={true}
+                  onSaveCharacter={saveCharacterToList}
+                />
                 <SelectExistingCharacterDialog
                   onSelect={addCombatant}
                 />
@@ -576,7 +605,11 @@ export function TrackerCombateSala({
 
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex gap-2 flex-wrap">
-            <AddCombatantDialog onAdd={addCombatant} />
+            <AddCombatantDialog 
+              onAdd={addCombatant}
+              showSaveToggle={!isDM}
+              onSaveCharacter={saveCharacterToList}
+            />
             <SelectExistingCharacterDialog
               onSelect={addCombatant}
             />

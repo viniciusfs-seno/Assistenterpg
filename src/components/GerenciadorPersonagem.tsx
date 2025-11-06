@@ -120,7 +120,7 @@ export function GerenciadorPersonagem() {
             >
               Atualizar
             </Button>
-            <AddCombatantDialog onAdd={addCharacter} />
+            <AddCombatantDialog onAdd={addCharacter} showInitiative={false} />
           </div>
         </div>
       </Card>

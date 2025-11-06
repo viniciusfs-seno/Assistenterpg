@@ -82,6 +82,10 @@ export function GerenciadorSala({ onJoinRoom }: RoomManagerProps) {
       }
       const { room } = await apiRequest('/rooms', { method: 'POST' }, token);
       setCreatedRoomCode(room.code);
+      
+      // Activate room by fetching it as DM (triggers heartbeat)
+      await apiRequest(`/rooms/${room.code}`, {}, token);
+      
       await fetchMyRooms();
       onJoinRoom(room.code, true);
     } catch (err: any) {
@@ -142,7 +146,8 @@ export function GerenciadorSala({ onJoinRoom }: RoomManagerProps) {
         setError('Sessão expirada. Por favor, faça login novamente.');
         return;
       }
-      await apiRequest(`/rooms/${code}`, {}, token); // heartbeat + ativação
+      // Activate room by fetching it as DM (triggers heartbeat and sets status to ACTIVE)
+      const { room } = await apiRequest(`/rooms/${code}`, {}, token);
       onJoinRoom(code, true);
     } catch (err: any) {
       setError(err.message || 'Falha ao entrar na sala');

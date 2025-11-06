@@ -20,6 +20,7 @@ import {
   Edit,
   Check,
   Brain,
+  Sparkles,
 } from "lucide-react";
 import type { Combatant } from './TrackerCombate';
 
@@ -233,7 +234,7 @@ export function CombatantCard({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-slate-300">
-                <span className="text-purple-400">⚡</span>
+                <Sparkles className="w-4 h-4 text-purple-400" />
                 <span>Energia Amaldiçoada</span>
               </div>
               <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>

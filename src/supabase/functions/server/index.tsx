@@ -147,12 +147,42 @@ app.delete('/make-server-9334e2c0/characters/:id', async (c) => {
 
 // ===== ROOM ROUTES =====
 
+app.get('/make-server-9334e2c0/rooms', async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      console.log('List rooms - unauthorized:', authError);
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const mine = c.req.query('mine');
+    
+    if (mine === '1') {
+      // Get all rooms for this user
+      console.log('Fetching rooms for user:', user.id);
+      const allRooms = await kv.getByPrefix('room:');
+      console.log('All rooms found:', allRooms.length);
+      const userRooms = allRooms.filter((room: any) => room.dmId === user.id);
+      console.log('User rooms:', userRooms.length);
+      return c.json({ rooms: userRooms });
+    }
+
+    return c.json({ rooms: [] });
+  } catch (error) {
+    console.log('List rooms error:', error);
+    return c.json({ error: 'Failed to list rooms' }, 500);
+  }
+});
+
 app.post('/make-server-9334e2c0/rooms', async (c) => {
   try {
     const accessToken = c.req.header('Authorization')?.split(' ')[1];
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (!user || authError) {
+      console.log('Create room - unauthorized:', authError);
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
@@ -165,10 +195,14 @@ app.post('/make-server-9334e2c0/rooms', async (c) => {
       currentTurnIndex: 0,
       combatStarted: false,
       round: 1,
+      status: 'CLOSED', // Room starts closed until DM enters
+      lastMasterSeen: null,
       createdAt: Date.now(),
     };
 
+    console.log('Creating room:', roomCode, 'for DM:', user.id);
     await kv.set(`room:${roomCode}`, roomData);
+    console.log('Room created successfully');
     return c.json({ room: roomData });
   } catch (error) {
     console.log('Create room error:', error);
@@ -182,14 +216,46 @@ app.get('/make-server-9334e2c0/rooms/:code', async (c) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (!user || authError) {
+      console.log('Get room - unauthorized:', authError);
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
     const roomCode = c.req.param('code');
-    const roomData = await kv.get(`room:${roomCode}`);
+    let roomData = await kv.get(`room:${roomCode}`);
     
     if (!roomData) {
+      console.log('Room not found:', roomCode);
       return c.json({ error: 'Room not found' }, 404);
+    }
+
+    const isDM = roomData.dmId === user.id;
+    console.log(`Get room ${roomCode} - User: ${user.id}, isDM: ${isDM}, currentStatus: ${roomData.status}`);
+
+    // If user is the DM, update heartbeat and set status to ACTIVE
+    if (isDM) {
+      roomData = {
+        ...roomData,
+        status: 'ACTIVE',
+        lastMasterSeen: Date.now(),
+      };
+      await kv.set(`room:${roomCode}`, roomData);
+      console.log(`Room ${roomCode} activated by DM`);
+    } else {
+      // For players, check if DM heartbeat is recent (within 30 seconds)
+      const now = Date.now();
+      const heartbeatAge = roomData.lastMasterSeen ? now - roomData.lastMasterSeen : Infinity;
+      
+      console.log(`Player checking room ${roomCode} - heartbeatAge: ${heartbeatAge}ms`);
+      
+      if (heartbeatAge > 30000) {
+        // DM hasn't been seen in 30 seconds, mark room as CLOSED
+        roomData = {
+          ...roomData,
+          status: 'CLOSED',
+        };
+        await kv.set(`room:${roomCode}`, roomData);
+        console.log(`Room ${roomCode} marked as CLOSED (DM inactive)`);
+      }
     }
 
     return c.json({ room: roomData });
