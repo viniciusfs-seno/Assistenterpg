@@ -85,7 +85,7 @@ export function DiceRoller({ onRoll }: DiceRollerProps) {
           <Button
             onClick={() => setShowCustom(!showCustom)}
             variant="outline"
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600" 
           >
             <Settings className="w-4 h-4 mr-2" />
             {showCustom ? 'Ocultar' : 'Rolagem Personalizada'}

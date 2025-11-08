@@ -487,7 +487,7 @@ export function TrackerCombate() {
             <Button
               variant="outline"
               onClick={() => persistReports([])}
-              className="border-slate-600"
+              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
             >
               Limpar todos
             </Button>

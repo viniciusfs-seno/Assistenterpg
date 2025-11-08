@@ -1,4 +1,4 @@
-// PersonagemCard.tsx 
+// PersonagemCard.tsx - VERSÃO COMPLETA COM TODAS AS CORREÇÕES
 
 import { useState } from 'react';
 import { Card } from './ui/card';
@@ -25,14 +25,28 @@ import {
 import type { Combatant } from './TrackerCombate';
 
 interface CombatantCardProps {
-  combatant: Combatant;
+  combatant: Combatant & {
+    effects?: string[];
+    insanitySaveCount?: number;
+    isInsane?: boolean;
+    fellInsaneOnRound?: number | null;
+  };
   isCurrentTurn?: boolean;
   onUpdate: (id: string, updates: Partial<Combatant>) => void;
   onRemove: (id: string) => void;
   onRevive?: (id: string) => void;
+  onTreatInsanity?: (id: string) => void;
   isDM?: boolean;
   isOwner?: boolean;
 }
+
+// ⬅️ MUDANÇA: Adicionar "Caído" aos efeitos
+const AVAILABLE_EFFECTS = [
+  { id: 'poisoned', label: 'Envenenado', color: 'bg-green-700', icon: '☠️' },
+  { id: 'burning', label: 'Em Chamas', color: 'bg-orange-600', icon: '🔥' },
+  { id: 'paralyzed', label: 'Paralizado', color: 'bg-purple-600', icon: '⚡' },
+  { id: 'prone', label: 'Caído', color: 'bg-slate-600', icon: '🔻' }, // ⬅️ NOVO
+];
 
 export function CombatantCard({
   combatant,
@@ -40,13 +54,13 @@ export function CombatantCard({
   onUpdate,
   onRemove,
   onRevive,
+  onTreatInsanity,
   isDM = false,
   isOwner = false,
 }: CombatantCardProps) {
   const [editingInitiative, setEditingInitiative] = useState(false);
   const [initiativeValue, setInitiativeValue] = useState(combatant.initiative);
   
-  // Estados para os inputs customizados de cada atributo
   const [healthCustom, setHealthCustom] = useState('');
   const [staminaCustom, setStaminaCustom] = useState('');
   const [cursedCustom, setCursedCustom] = useState('');
@@ -54,38 +68,32 @@ export function CombatantCard({
 
   const canEdit = isDM || isOwner;
 
-  // Função de ajuste CORRIGIDA - especialmente para sanidade
   const adjust = (field: 'health' | 'stamina' | 'cursed' | 'sanity', amount: number) => {
-  if (field === 'health') {
-    // Remove Math.min para permitir ultrapassar maxHealth
-    const newHealth = Math.max(0, combatant.health + amount);
-    onUpdate(combatant.id, { health: newHealth });
-  } else if (field === 'stamina') {
-    const newStamina = Math.max(0, combatant.stamina + amount);
-    onUpdate(combatant.id, { stamina: newStamina });
-  } else if (field === 'cursed') {
-    const currentCursed = combatant.cursedEnergy ?? 0;
-    const newCursed = Math.max(0, currentCursed + amount);
-    onUpdate(combatant.id, { cursedEnergy: newCursed });
-  } else if (field === 'sanity') {
-    const currentSanity = combatant.sanity ?? 100;
-    const newSanity = Math.max(0, currentSanity + amount);
-    onUpdate(combatant.id, { sanity: newSanity });
-  }
-};
+    if (field === 'health') {
+      const newHealth = Math.max(0, combatant.health + amount);
+      onUpdate(combatant.id, { health: newHealth });
+    } else if (field === 'stamina') {
+      const newStamina = Math.max(0, combatant.stamina + amount);
+      onUpdate(combatant.id, { stamina: newStamina });
+    } else if (field === 'cursed') {
+      const currentCursed = combatant.cursedEnergy ?? 0;
+      const newCursed = Math.max(0, currentCursed + amount);
+      onUpdate(combatant.id, { cursedEnergy: newCursed });
+    } else if (field === 'sanity') {
+      const currentSanity = combatant.sanity ?? 100;
+      const newSanity = Math.max(0, currentSanity + amount);
+      onUpdate(combatant.id, { sanity: newSanity });
+    }
+  };
 
-
-  // Função para aplicar valor customizado dos inputs
   const applyCustomValue = (field: 'health' | 'stamina' | 'cursed' | 'sanity', value: string) => {
     if (!value.trim()) return;
     
-    // Remove espaços e converte para número
     const numValue = parseInt(value);
     if (isNaN(numValue)) return;
     
     adjust(field, numValue);
     
-    // Limpa o input após aplicar
     if (field === 'health') setHealthCustom('');
     else if (field === 'stamina') setStaminaCustom('');
     else if (field === 'cursed') setCursedCustom('');
@@ -97,7 +105,6 @@ export function CombatantCard({
   const cursedPercent = Math.min(100, combatant.maxCursedEnergy > 0 ? ((combatant.cursedEnergy ?? 0) / combatant.maxCursedEnergy) * 100 : 0);
   const sanityPercent = Math.min(100, combatant.maxSanity > 0 ? ((combatant.sanity ?? 100) / combatant.maxSanity) * 100 : 100);
 
-
   const getHealthColor = () => {
     if (healthPercent > 60) return "bg-green-500";
     if (healthPercent > 30) return "bg-yellow-500";
@@ -106,6 +113,58 @@ export function CombatantCard({
 
   const isDead = combatant.health === 0;
   const isDeceased = combatant.isDeceased || false;
+  const isInsane = combatant.isInsane || false;
+  const isGoingInsane = combatant.sanity === 0 && !isInsane && combatant.insanitySaveCount !== undefined;
+
+  // ⬅️ MUDANÇA 1: Remove badge "Morrendo" para não ser redundante
+  const getStatusBadges = () => {
+    const badges = [];
+    const isWounded = combatant.health > 0 && combatant.health <= combatant.maxHealth * 0.5;
+    
+    if (isDeceased) {
+      badges.push(<Badge key="deceased" className="bg-red-600"><Skull className="w-3 h-3 mr-1" />Morto</Badge>);
+    } else if (isDead) {
+      // ⬅️ NÃO mostra badge "Morrendo" aqui (redundante com "Morrendo (X)")
+      if (isWounded) {
+        badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
+      }
+    } else {
+      badges.push(<Badge key="alive" className="bg-green-600">Vivo</Badge>);
+      if (isWounded) {
+        badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
+      }
+    }
+    
+    // ⬅️ CORREÇÃO: Badge "Enlouqueceu" com inline style
+    if (isInsane) {
+      badges.push(
+        <Badge 
+          key="insane" 
+          className="text-white shadow-lg font-semibold"
+          style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+        >
+          <Brain className="w-3 h-3 mr-1" />Enlouqueceu
+        </Badge>
+      );
+    }
+    
+    return badges;
+  };
+
+  const getEffectBadges = () => {
+    if (!combatant.effects || combatant.effects.length === 0) return null;
+    
+    return combatant.effects.map(effectId => {
+      const effect = AVAILABLE_EFFECTS.find(e => e.id === effectId);
+      if (!effect) return null;
+      
+      return (
+        <Badge key={effectId} className={`${effect.color} text-white`}>
+          {effect.icon} {effect.label}
+        </Badge>
+      );
+    }).filter(Boolean);
+  };
 
   return (
     <Card
@@ -172,10 +231,30 @@ export function CombatantCard({
                 <Badge variant={combatant.isPlayer ? "default" : "secondary"} className={combatant.isPlayer ? "bg-blue-600" : "bg-red-600"}>
                   {combatant.isPlayer ? (<><Shield className="w-3 h-3 mr-1" /> Player</>) : (<><Sword className="w-3 h-3 mr-1" /> NPC</>)}
                 </Badge>
+                
+                {isDM && (
+                  <>
+                    {getStatusBadges()}
+                    {getEffectBadges()}
+                  </>
+                )}
+                
                 {isCurrentTurn && !isDeceased && (<Badge className="bg-yellow-600">Turno Atual</Badge>)}
-                {isDeceased && (<Badge variant="destructive" className="bg-black border-red-900"><Skull className="w-3 h-3 mr-1" /> Morto</Badge>)}
+                
+                {/* ⬅️ MUDANÇA 1: Trocar "Morte em X turnos" por "Morrendo (X)" */}
                 {isDead && !isDeceased && combatant.deathSaveCount !== undefined && (
-                  <Badge className="bg-orange-600"><HeartPulse className="w-3 h-3 mr-1" />Morte em {combatant.deathSaveCount} turnos</Badge>
+                  <Badge className="bg-orange-600 text-white border-2 border-orange-400 shadow-lg">
+                    <HeartPulse className="w-3 h-3 mr-1" />Morrendo ({combatant.deathSaveCount})
+                  </Badge>
+                )}
+                
+                {isGoingInsane && (
+                  <Badge 
+                    className="text-white border-2 shadow-lg font-semibold"
+                    style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+                  >
+                    <Brain className="w-3 h-3 mr-1" />Enlouquecendo ({combatant.insanitySaveCount})
+                  </Badge>
                 )}
               </div>
             </div>
@@ -209,7 +288,7 @@ export function CombatantCard({
               </Button>
             )}
             
-            {canEdit && !isDeceased && (
+            {canEdit && !isDeceased && !(isDead && !isDM) && (
               <div className="space-y-1 mt-2">
                 <div className="flex gap-1">
                   <Button 
@@ -246,7 +325,7 @@ export function CombatantCard({
                     size="sm"
                     variant="outline"
                     onClick={() => applyCustomValue('health', healthCustom)}
-                    className="border-slate-600"
+                    className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                   >
                     <Check className="w-3 h-3" />
                   </Button>
@@ -266,7 +345,22 @@ export function CombatantCard({
                 <span className="text-sm text-slate-300">{combatant.sanity ?? 100} / {combatant.maxSanity ?? 100}</span>
               </div>
               <Progress value={sanityPercent} className="h-2 bg-slate-700" indicatorClassName="bg-cyan-500" />
-              {canEdit && (
+              
+              {isDM && isGoingInsane && onTreatInsanity && (
+                <Button 
+                  size="sm" 
+                  onClick={() => onTreatInsanity(combatant.id)} 
+                  className="w-full text-white font-semibold shadow-lg mt-2"
+                  style={{ backgroundColor: '#06b6d4' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#22d3ee'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#06b6d4'}
+                >
+                  <Brain className="w-4 h-4 mr-2" /> Tratar (1 Sanidade)
+                </Button>
+              )}
+              
+              {/* ⬅️ CORREÇÃO: Bloqueia sanidade se Morrendo OU Enlouquecendo (para jogadores) */}
+              {canEdit && !(isDead && !isDM) && !(isGoingInsane && !isDM) && (
                 <div className="space-y-1 mt-2">
                   <div className="flex gap-1">
                     <Button 
@@ -303,7 +397,7 @@ export function CombatantCard({
                       size="sm"
                       variant="outline"
                       onClick={() => applyCustomValue('sanity', sanityCustom)}
-                      className="border-slate-600"
+                      className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                     >
                       <Check className="w-3 h-3" />
                     </Button>
@@ -312,6 +406,7 @@ export function CombatantCard({
               )}
             </div>
           )}
+
 
           {/* Coluna 1, Linha 2: Esforço */}
           {!isDeceased && (
@@ -324,7 +419,7 @@ export function CombatantCard({
                 <span className="text-sm text-slate-300">{combatant.stamina} / {combatant.maxStamina}</span>
               </div>
               <Progress value={staminaPercent} className="h-2 bg-slate-700" indicatorClassName="bg-yellow-500" />
-              {canEdit && (
+              {canEdit && !(isDead && !isDM) && (
                 <div className="space-y-1 mt-2">
                   <div className="flex gap-1">
                     <Button 
@@ -361,7 +456,7 @@ export function CombatantCard({
                       size="sm"
                       variant="outline"
                       onClick={() => applyCustomValue('stamina', staminaCustom)}
-                      className="border-slate-600"
+                      className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                     >
                       <Check className="w-3 h-3" />
                     </Button>
@@ -371,7 +466,7 @@ export function CombatantCard({
             </div>
           )}
 
-          {/* Coluna 2, Linha 2: Energia Amaldiçoada */}
+         {/* Coluna 2, Linha 2: Energia Amaldiçoada */}
           {!isDeceased && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -382,7 +477,7 @@ export function CombatantCard({
                 <span className="text-sm text-slate-300">{combatant.cursedEnergy ?? 0} / {combatant.maxCursedEnergy ?? 0}</span>
               </div>
               <Progress value={cursedPercent} className="h-2 bg-slate-700" indicatorClassName="bg-purple-600" />
-              {canEdit && (
+              {canEdit && !(isDead && !isDM) && (
                 <div className="space-y-1 mt-2">
                   <div className="flex gap-1">
                     <Button 
@@ -419,7 +514,7 @@ export function CombatantCard({
                       size="sm"
                       variant="outline"
                       onClick={() => applyCustomValue('cursed', cursedCustom)}
-                      className="border-slate-600"
+                      className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                     >
                       <Check className="w-3 h-3" />
                     </Button>
@@ -427,17 +522,6 @@ export function CombatantCard({
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Badge de status agregado */}
-        <div className="mt-2">
-          {combatant.isDeceased ? (
-            <Badge className="bg-red-600">Morto</Badge>
-          ) : combatant.health === 0 ? (
-            <Badge className="bg-orange-600">Caído ({combatant.deathSaveCount})</Badge>
-          ) : (
-            <Badge className="bg-green-600">Ativo</Badge>
           )}
         </div>
       </div>

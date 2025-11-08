@@ -279,7 +279,7 @@ export function GerenciadorSala({ onJoinRoom }: RoomManagerProps) {
             size="sm"
             variant="outline"
             onClick={fetchMyRooms}
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600" 
             disabled={roomsLoading}
           >
             Atualizar

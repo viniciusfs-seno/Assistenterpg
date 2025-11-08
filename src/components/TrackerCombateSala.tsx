@@ -1,4 +1,4 @@
-// src/components/TrackerCombateSala.tsx — MIGRADO PARA WEBSOCKET (VERSÃO COMPLETA)
+// src/components/TrackerCombateSala.tsx — VERSÃO COMPLETA COM TODAS AS CORREÇÕES
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
@@ -23,13 +23,14 @@ import {
   Zap,
   Wifi,
   WifiOff,
+  Brain,
 } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { apiRequest } from "../utils/api";
-import { supabase } from "../utils/supabase/client"; // ⬅️ NOVO
+import { supabase } from "../utils/supabase/client";
 import type { Combatant } from "./TrackerCombate";
 import type { NPCTemplate } from "./BibliotecaNPC";
-import type { RealtimeChannel } from "@supabase/supabase-js"; // ⬅️ NOVO
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,9 @@ interface CombatantWithEffects extends Combatant {
   effects?: string[];
   wasAliveAtStart?: boolean;
   diedOnRound?: number | null;
+  insanitySaveCount?: number;
+  isInsane?: boolean;
+  fellInsaneOnRound?: number | null;
 }
 
 type RoomData = {
@@ -62,10 +66,12 @@ type RoomData = {
   combatants: CombatantWithEffects[];
 };
 
+// ⬅️ MUDANÇA 2: Adicionar "Caído" aos efeitos
 const AVAILABLE_EFFECTS = [
   { id: 'poisoned', label: 'Envenenado', color: 'bg-green-700', icon: '☠️' },
   { id: 'burning', label: 'Em Chamas', color: 'bg-orange-600', icon: '🔥' },
   { id: 'paralyzed', label: 'Paralizado', color: 'bg-purple-600', icon: '⚡' },
+  { id: 'prone', label: 'Caído', color: 'bg-slate-600', icon: '🔻' }, // ⬅️ NOVO
 ];
 
 export function TrackerCombateSala({
@@ -98,7 +104,6 @@ export function TrackerCombateSala({
   const [showEffectsDialog, setShowEffectsDialog] = useState(false);
   const [selectedCombatantForEffects, setSelectedCombatantForEffects] = useState<string | null>(null);
   
-  // ⬅️ NOVO: Estado de conexão WebSocket
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
@@ -117,7 +122,6 @@ export function TrackerCombateSala({
     (c) => c.isPlayer && c.id.startsWith(`player_${user?.id}`),
   );
 
-  // ⬅️ NOVO: Fetch inicial (apenas uma vez)
   const fetchRoomOnce = async () => {
     try {
       const token = await getAccessToken();
@@ -148,14 +152,11 @@ export function TrackerCombateSala({
     }
   };
 
-    // ⬅️ MODIFICADO: Update room via HTTP (ainda precisa para persistência)
-    // ⬅️ MODIFICADO: Envia broadcast após atualizar HTTP
   const updateRoomData = async (updates: Partial<RoomData>) => {
     try {
       const token = await getAccessToken();
       if (!token) return;
       
-      // 1. Atualiza no servidor (persistência)
       const response = await apiRequest(
         `/rooms/${roomCode}`,
         {
@@ -167,7 +168,6 @@ export function TrackerCombateSala({
       
       const roomData = response.room as RoomData;
       
-      // 2. Envia broadcast para outros clientes (tempo real)
       if (channelRef.current) {
         await channelRef.current.send({
           type: 'broadcast',
@@ -182,8 +182,6 @@ export function TrackerCombateSala({
     }
   };
 
-
-  // ⬅️ NOVO: Heartbeat do mestre (mantém sala ativa)
   const sendHeartbeat = async () => {
     if (!isDM) return;
     
@@ -197,54 +195,50 @@ export function TrackerCombateSala({
     }
   };
 
-    // ⬅️ CORRIGIDO: Usa Broadcast ao invés de Postgres Changes
   useEffect(() => {
     if (!roomCode) return;
 
     fetchRoomOnce();
 
-    // ⬅️ NOVO: Canal de broadcast para atualizações instantâneas
     const channel = supabase
       .channel(`room:${roomCode}`, {
         config: {
-          broadcast: { self: true }, // Recebe até suas próprias mensagens
+          broadcast: { self: true },
         },
       })
       .on('broadcast', { event: 'room-update' }, (payload) => {
-      console.log('📡 Room updated via Broadcast:', payload);
-      
-      const roomData = payload.payload as RoomData;
-      
-      // ⬅️ CORRIGIDO: Busca jogador atual nos dados recebidos
-      const currentPlayerCombatant = roomData.combatants.find(
-        (c: CombatantWithEffects) => c.isPlayer && c.id.startsWith(`player_${user?.id}`)
-      );
-      
-      // Detectar fim de combate para jogadores
-      if (!isDM && previousCombatStartedRef.current && !roomData.combatStarted && currentPlayerCombatant) {
-        console.log('🎯 Combate encerrado detectado para jogador!');
-        setPlayerReportData({
-          character: currentPlayerCombatant,
-          roundEnded: roomData.round,
-          timestamp: new Date().toISOString()
-        });
-        setShowPlayerReport(true);
-      }
-      
-      const validCombatants = (roomData.combatants || []).filter(
-        (c: any) => c && c.id
-      );
-      
-      setCombatants(validCombatants);
-      setCurrentTurnIndex(roomData.currentTurnIndex || 0);
-      setCombatStarted(roomData.combatStarted || false);
-      previousCombatStartedRef.current = roomData.combatStarted || false;
-      setRound(roomData.round || 1);
-      
-      if (!isDM && roomData.status !== 'ACTIVE') {
-        onLeaveRoom();
-      }
-    })
+        console.log('📡 Room updated via Broadcast:', payload);
+        
+        const roomData = payload.payload as RoomData;
+        
+        const currentPlayerCombatant = roomData.combatants.find(
+          (c: CombatantWithEffects) => c.isPlayer && c.id.startsWith(`player_${user?.id}`)
+        );
+        
+        if (!isDM && previousCombatStartedRef.current && !roomData.combatStarted && currentPlayerCombatant) {
+          console.log('🎯 Combate encerrado detectado para jogador!');
+          setPlayerReportData({
+            character: currentPlayerCombatant,
+            roundEnded: roomData.round,
+            timestamp: new Date().toISOString()
+          });
+          setShowPlayerReport(true);
+        }
+        
+        const validCombatants = (roomData.combatants || []).filter(
+          (c: any) => c && c.id
+        );
+        
+        setCombatants(validCombatants);
+        setCurrentTurnIndex(roomData.currentTurnIndex || 0);
+        setCombatStarted(roomData.combatStarted || false);
+        previousCombatStartedRef.current = roomData.combatStarted || false;
+        setRound(roomData.round || 1);
+        
+        if (!isDM && roomData.status !== 'ACTIVE') {
+          onLeaveRoom();
+        }
+      })
       .subscribe((status) => {
         console.log('🔌 Broadcast status:', status);
         
@@ -304,6 +298,9 @@ export function TrackerCombateSala({
       effects: [],
       wasAliveAtStart: undefined,
       diedOnRound: null,
+      insanitySaveCount: undefined,
+      isInsane: false,
+      fellInsaneOnRound: null,
     };
     const updatedCombatants = [...combatants, newCombatant];
     
@@ -379,6 +376,7 @@ export function TrackerCombateSala({
           (c.damageTaken || 0) + damageTaken;
       }
 
+      // ⬅️ MUDANÇA 4: Adiciona efeito "Caído" quando ficar morrendo
       if (
         updated.health === 0 &&
         c.health > 0 &&
@@ -387,6 +385,12 @@ export function TrackerCombateSala({
         updated.deathSaveCount = 3;
         updated.timesFallen = (c.timesFallen || 0) + 1;
         updated.fellOnRound = round;
+        
+        // Adiciona condição "Caído" automaticamente
+        const currentEffects = updated.effects || [];
+        if (!currentEffects.includes('prone')) {
+          updated.effects = [...currentEffects, 'prone'];
+        }
       }
 
       if (updated.health > 0) {
@@ -394,12 +398,38 @@ export function TrackerCombateSala({
         updated.isDeceased = false;
         updated.fellOnRound = null;
         updated.diedOnRound = null;
+        // ⬅️ NÃO remove "Caído" ao reviver (deve ser manual)
       }
       
       if (updated.isDeceased && !c.isDeceased) {
         updated.effects = [];
+        updated.insanitySaveCount = undefined;
+        updated.isInsane = false;
+        updated.fellInsaneOnRound = null;
+        
         if (c.wasAliveAtStart) {
           updated.diedOnRound = round;
+        }
+      }
+
+      if (
+        updates.sanity !== undefined &&
+        updates.sanity === 0 &&
+        c.sanity > 0 &&
+        !updated.isInsane
+      ) {
+        updated.insanitySaveCount = 3;
+        updated.fellInsaneOnRound = round;
+      }
+
+      if (
+        updates.sanity !== undefined &&
+        updates.sanity > 0 &&
+        c.sanity === 0
+      ) {
+        if (!c.isInsane) {
+          updated.insanitySaveCount = undefined;
+          updated.fellInsaneOnRound = null;
         }
       }
 
@@ -420,6 +450,22 @@ export function TrackerCombateSala({
             isDeceased: false,
             fellOnRound: null,
             diedOnRound: null,
+            // ⬅️ NÃO remove "Caído" ao reviver
+          }
+        : c,
+    );
+    setCombatants(updatedCombatants);
+    await updateRoomData({ combatants: updatedCombatants });
+  };
+
+  const treatInsanity = async (id: string) => {
+    const updatedCombatants = combatants.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            sanity: 1,
+            insanitySaveCount: undefined,
+            fellInsaneOnRound: null,
           }
         : c,
     );
@@ -497,7 +543,9 @@ export function TrackerCombateSala({
       return;
     }
 
-    const updatedWithDeathSaves = combatants.map((c) => {
+    const updatedWithSaves = combatants.map((c) => {
+      let updated = { ...c };
+
       if (
         c.id === currentCombatant.id &&
         c.health === 0 &&
@@ -509,25 +557,51 @@ export function TrackerCombateSala({
         }
         const newCount = c.deathSaveCount - 1;
         if (newCount <= 0) {
-          const updated = {
-            ...c,
+          updated = {
+            ...updated,
             deathSaveCount: 0,
             isDeceased: true,
             timesDied: (c.timesDied || 0) + 1,
             effects: [],
+            insanitySaveCount: undefined,
+            isInsane: false,
+            fellInsaneOnRound: null,
           };
           if (c.wasAliveAtStart) {
             updated.diedOnRound = round;
           }
+        } else {
+          updated.deathSaveCount = newCount;
+        }
+      }
+
+      if (
+        c.id === currentCombatant.id &&
+        c.sanity === 0 &&
+        !c.isInsane &&
+        c.insanitySaveCount !== undefined
+      ) {
+        if (c.fellInsaneOnRound === round) {
           return updated;
         }
-        return { ...c, deathSaveCount: newCount };
+        const newCount = c.insanitySaveCount - 1;
+        if (newCount <= 0) {
+          updated = {
+            ...updated,
+            insanitySaveCount: 0,
+            isInsane: true,
+          };
+        } else {
+          updated.insanitySaveCount = newCount;
+        }
       }
-      return c;
+      
+      return updated;
     });
-    setCombatants(updatedWithDeathSaves);
+    
+    setCombatants(updatedWithSaves);
 
-    const updatedActiveCombatants = updatedWithDeathSaves
+    const updatedActiveCombatants = updatedWithSaves
       .filter((c) => !c.isDeceased)
       .sort((a, b) => b.initiative - a.initiative);
 
@@ -536,14 +610,14 @@ export function TrackerCombateSala({
       setCurrentTurnIndex(0);
       setRound(round + 1);
       await updateRoomData({
-        combatants: updatedWithDeathSaves,
+        combatants: updatedWithSaves,
         currentTurnIndex: 0,
         round: round + 1,
       });
     } else {
       setCurrentTurnIndex(nextIndex);
       await updateRoomData({
-        combatants: updatedWithDeathSaves,
+        combatants: updatedWithSaves,
         currentTurnIndex: nextIndex,
       });
     }
@@ -588,6 +662,9 @@ export function TrackerCombateSala({
       effects: [],
       wasAliveAtStart: undefined,
       diedOnRound: null,
+      insanitySaveCount: undefined,
+      isInsane: false,
+      fellInsaneOnRound: null,
     }));
     setCombatStarted(false);
     previousCombatStartedRef.current = false;
@@ -616,6 +693,7 @@ export function TrackerCombateSala({
     });
   };
   
+  // ⬅️ MUDANÇA 1: Remove badge "Morrendo" para mestre, mostra apenas na ordem de iniciativa
   const getStatusBadges = (c: CombatantWithEffects) => {
     const badges = [];
     const isWounded = c.health > 0 && c.health <= c.maxHealth * 0.5;
@@ -623,7 +701,7 @@ export function TrackerCombateSala({
     if (c.isDeceased) {
       badges.push(<Badge key="deceased" className="bg-red-600">Morto</Badge>);
     } else if (c.health === 0) {
-      badges.push(<Badge key="fallen" className="bg-orange-600">Caído</Badge>);
+      // ⬅️ NÃO mostra badge "Morrendo" aqui (redundante com "Morrendo (X)")
       if (isWounded) {
         badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
       }
@@ -632,6 +710,10 @@ export function TrackerCombateSala({
       if (isWounded) {
         badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
       }
+    }
+    
+    if (c.isInsane) {
+      badges.push(<Badge key="insane" className="bg-pink-600"><Brain className="w-3 h-3 mr-1" />Enlouqueceu</Badge>);
     }
     
     return badges;
@@ -682,7 +764,6 @@ export function TrackerCombateSala({
     </div>
   );
 
-  // Player view
   if (!isDM) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
@@ -693,7 +774,7 @@ export function TrackerCombateSala({
                 variant="outline"
                 size="sm"
                 onClick={onLeaveRoom}
-                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Sair
@@ -770,6 +851,9 @@ export function TrackerCombateSala({
                 <div className="space-y-2">
                   {sortedCombatants.map((c, idx) => {
                     const isCurrentTurn = activeCombatants[currentTurnIndex]?.id === c.id;
+                    const isDying = c.health === 0 && !c.isDeceased;
+                    const isGoingInsane = c.sanity === 0 && !c.isInsane && c.insanitySaveCount !== undefined;
+                    
                     return (
                       <div
                         key={c.id}
@@ -793,7 +877,30 @@ export function TrackerCombateSala({
                           )}
                         </div>
                         <div className="flex gap-1 flex-wrap">
-                          {getStatusBadges(c)}
+                          {c.isDeceased ? (
+                            <Badge className="bg-red-600">
+                              Morto
+                            </Badge>
+                          ) : isDying ? (
+                            <Badge className="bg-orange-600">
+                              Morrendo
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-green-600">
+                              Vivo
+                            </Badge>
+                          )}
+                          
+                          {/* ⬅️ MUDANÇA 3: Mostra Enlouquecendo para jogadores */}
+                          {isGoingInsane && (
+                            <Badge 
+                              className="text-white shadow-lg font-semibold"
+                              style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+                            >
+                              Enlouquecendo
+                            </Badge>
+                          )}
+                          
                           {getEffectBadges(c)}
                         </div>
                       </div>
@@ -893,7 +1000,6 @@ export function TrackerCombateSala({
     );
   }
 
-  // DM view
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Card className="p-4 bg-slate-800/50 border-slate-700">
@@ -903,7 +1009,7 @@ export function TrackerCombateSala({
               variant="outline"
               size="sm"
               onClick={onLeaveRoom}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Sair
@@ -967,7 +1073,7 @@ export function TrackerCombateSala({
                 <Button
                   onClick={resetCombat}
                   variant="outline"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Reset
@@ -978,7 +1084,7 @@ export function TrackerCombateSala({
             <Button
               onClick={() => setShowReportsList(true)}
               variant="outline"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
             >
               📜 Ver Relatórios de Combate
             </Button>
@@ -986,7 +1092,7 @@ export function TrackerCombateSala({
             <Button
               onClick={clearAll}
               variant="outline"
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600 disabled:opacity-50"
               disabled={combatants.length === 0}
             >
               Limpar
@@ -1029,6 +1135,7 @@ export function TrackerCombateSala({
                 onUpdate={updateCombatant}
                 onRemove={removeCombatant}
                 onRevive={reviveCombatant}
+                onTreatInsanity={treatInsanity}
                 isDM={isDM}
               />
               {isDM && !combatant.isDeceased && (
@@ -1039,7 +1146,7 @@ export function TrackerCombateSala({
                     setSelectedCombatantForEffects(combatant.id);
                     setShowEffectsDialog(true);
                   }}
-                  className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                  className="w-full bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
                 >
                   ⚡ Gerenciar Efeitos
                 </Button>
@@ -1097,198 +1204,95 @@ export function TrackerCombateSala({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={showCombatReport}
-        onOpenChange={setShowCombatReport}
-      >
+      {/* Resto dos dialogs iguais... */}
+      <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-2xl">
-              Relatório do Combate
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Round {round} completado
-            </DialogDescription>
+            <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
+            <DialogDescription className="text-slate-400">Round {round} completado</DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 p-4">
             {combatants.map((c) => (
-              <Card
-                key={c.id}
-                className="p-3 bg-slate-700/50 border-slate-600"
-              >
+              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-white font-medium">
-                      {c.name}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      Final HP: {c.health}/{c.maxHealth}
-                    </div>
+                    <div className="text-white font-medium">{c.name}</div>
+                    <div className="text-xs text-slate-400">Final HP: {c.health}/{c.maxHealth}</div>
                   </div>
                   <div className="text-sm text-slate-300">
-                    Dano: {c.damageTaken || 0} | Quedas:{" "}
-                    {c.timesFallen || 0}
-                    {c.isDeceased && (
-                      <div className="text-red-400">Morto</div>
-                    )}
+                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                    {c.isDeceased && <div className="text-red-400">Morto</div>}
                   </div>
                 </div>
               </Card>
             ))}
           </div>
-
           <div className="flex justify-end gap-2 p-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowCombatReport(false)}
-              className="border-slate-600"
-            >
-              Fechar
-            </Button>
-            <Button
-              onClick={() => {
-                setShowCombatReport(false);
-                resetCombat();
-              }}
-              className="bg-green-700 hover:bg-green-600"
-            >
-              Novo Combate
-            </Button>
+            <Button variant="outline" onClick={() => setShowCombatReport(false)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
+            <Button onClick={() => { setShowCombatReport(false); resetCombat(); }} className="bg-green-700 hover:bg-green-600">Novo Combate</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={showReportsList}
-        onOpenChange={setShowReportsList}
-      >
+      <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle>Relatórios Salvos</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Relatórios de combates anteriores (localStorage)
-            </DialogDescription>
+            <DialogDescription className="text-slate-400">Relatórios de combates anteriores (localStorage)</DialogDescription>
           </DialogHeader>
-
           <div className="p-4 space-y-3">
             {battleReports.length === 0 ? (
-              <div className="text-slate-400">
-                Nenhum relatório salvo.
-              </div>
+              <div className="text-slate-400">Nenhum relatório salvo.</div>
             ) : (
               battleReports.map((r: any) => (
-                <Card
-                  key={r.id}
-                  className="p-3 bg-slate-700/50 border-slate-600"
-                >
+                <Card key={r.id} className="p-3 bg-slate-700/50 border-slate-600">
                   <div className="flex justify-between">
                     <div>
-                      <div className="text-white font-medium">
-                        {new Date(r.timestamp).toLocaleString()}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        Rounds: {r.roundEnded}
-                      </div>
+                      <div className="text-white font-medium">{new Date(r.timestamp).toLocaleString()}</div>
+                      <div className="text-xs text-slate-400">Rounds: {r.roundEnded}</div>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedReport(r);
-                        }}
-                      >
-                        Ver
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => {
-                          const filtered = battleReports.filter(
-                            (br) => br.id !== r.id,
-                          );
-                          persistReports(filtered);
-                        }}
-                      >
-                        Excluir
-                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setSelectedReport(r)}>Ver</Button>
+                      <Button size="sm" variant="destructive" onClick={() => persistReports(battleReports.filter((br) => br.id !== r.id))}>Excluir</Button>
                     </div>
                   </div>
                 </Card>
               ))
             )}
           </div>
-
           <div className="p-4 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                persistReports([]);
-              }}
-              className="border-slate-600"
-            >
-              Limpar todos
-            </Button>
-            <Button
-              onClick={() => setShowReportsList(false)}
-              className="bg-green-700 hover:bg-green-600"
-            >
-              Fechar
-            </Button>
+            <Button variant="outline" onClick={() => persistReports([])} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Limpar todos</Button>
+            <Button onClick={() => setShowReportsList(false)} className="bg-green-700 hover:bg-green-600">Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!selectedReport}
-        onOpenChange={(open) => !open && setSelectedReport(null)}
-      >
+      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-2xl">
-              Relatório do Combate
-            </DialogTitle>
+            <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
             <DialogDescription className="text-slate-400">
               {selectedReport && new Date(selectedReport.timestamp).toLocaleString()} - Round {selectedReport?.roundEnded}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 p-4">
             {selectedReport?.combatants.map((c: any) => (
-              <Card
-                key={c.id}
-                className="p-3 bg-slate-700/50 border-slate-600"
-              >
+              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-white font-medium">
-                      {c.name}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      Final HP: {c.finalHP}
-                    </div>
+                    <div className="text-white font-medium">{c.name}</div>
+                    <div className="text-xs text-slate-400">Final HP: {c.finalHP}</div>
                   </div>
                   <div className="text-sm text-slate-300">
-                    Dano: {c.damageTaken || 0} | Quedas:{" "}
-                    {c.timesFallen || 0}
-                    {c.died && (
-                      <div className="text-red-400">Morto</div>
-                    )}
+                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                    {c.died && <div className="text-red-400">Morto</div>}
                   </div>
                 </div>
               </Card>
             ))}
           </div>
-
           <div className="flex justify-end gap-2 p-4">
-            <Button
-              variant="outline"
-              onClick={() => setSelectedReport(null)}
-              className="border-slate-600"
-            >
-              Fechar
-            </Button>
+            <Button variant="outline" onClick={() => setSelectedReport(null)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>
