@@ -1,31 +1,66 @@
-// App.tsx — Comentários em PT-BR adicionados sem alterar a lógica
+// App.tsx — Sistema v2.0 integrado (mantém estrutura original) - CORRIGIDO
 
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { PaginaLogin } from './components/PaginaLogin';
 import { PaginaMenuPrincipal } from './components/PaginaMenuPrincipal';
 import { TrackerCombateSala } from './components/TrackerCombateSala';
+import { CharacterList } from './components/ficha/CharacterList';
+import { CharacterCreationWizard } from './components/ficha/CharacterCreationWizard';
+import { FichaPersonagemCompleta } from './components/ficha/FichaPersonagemCompleta';
 import { Sword } from 'lucide-react';
 
-// Componente que controla a navegação interna com base no estado de autenticação e da sala atual
+// Tipo para controlar qual tela mostrar
+type AppView = 
+  | { type: 'menu' }
+  | { type: 'room'; code: string; isDM: boolean }
+  | { type: 'characters' }
+  | { type: 'character-create' }
+  | { type: 'character-view'; characterId: string };
+
+// Componente que controla a navegação interna
 function AppContent() {
-  // Obtém usuário e estado de carregamento do contexto de autenticação (Supabase)
   const { user, loading } = useAuth();
+  const [currentView, setCurrentView] = useState<AppView>({ type: 'menu' });
 
-  // Controla a sala atual (roomCode) e se o usuário atua como Mestre (DM)
-  const [currentRoom, setCurrentRoom] = useState<{ code: string; isDM: boolean } | null>(null);
-
-  // Handler: entrar em uma sala (define o código e se é DM)
+  // ========== HANDLERS DE NAVEGAÇÃO ==========
+  
+  // Handler: entrar em uma sala
   const handleJoinRoom = (roomCode: string, isDM: boolean) => {
-    setCurrentRoom({ code: roomCode, isDM });
+    setCurrentView({ type: 'room', code: roomCode, isDM });
   };
 
-  // Handler: sair da sala atual e voltar ao menu principal
+  // Handler: sair da sala
   const handleLeaveRoom = () => {
-    setCurrentRoom(null);
+    setCurrentView({ type: 'menu' });
   };
 
-  // Estado global de autenticação ainda carregando: mostra splash/loading simples
+  // Handler: ir para lista de personagens
+  const handleNavigateToCharacters = () => {
+    setCurrentView({ type: 'characters' });
+  };
+
+  // Handler: ir para criação de personagem
+  const handleNavigateToCharacterCreate = () => {
+    setCurrentView({ type: 'character-create' });
+  };
+
+  // Handler: ir para visualização de personagem
+  const handleNavigateToCharacterView = (characterId: string) => {
+    setCurrentView({ type: 'character-view', characterId });
+  };
+
+  // Handler: voltar ao menu principal
+  const handleBackToMenu = () => {
+    setCurrentView({ type: 'menu' });
+  };
+
+  // Handler: voltar para lista de personagens
+  const handleBackToCharacters = () => {
+    setCurrentView({ type: 'characters' });
+  };
+
+  // ========== LOADING ==========
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
@@ -37,13 +72,15 @@ function AppContent() {
     );
   }
 
-  // Não autenticado: renderiza tela de login
+  // ========== NÃO AUTENTICADO ==========
   if (!user) {
     return <PaginaLogin />;
   }
 
-  // Dentro de uma sala: renderiza o tracker sincronizado por sala (tempo real via polling no serverless)
-  if (currentRoom) {
+  // ========== RENDERIZAÇÃO BASEADA NA VIEW ATUAL ==========
+  
+  // Dentro de uma sala
+  if (currentView.type === 'room') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="container mx-auto px-4 py-8">
@@ -56,8 +93,8 @@ function AppContent() {
             <p className="text-slate-400">Gerenciador de Combate do Seno</p>
           </div>
           <TrackerCombateSala
-            roomCode={currentRoom.code}
-            isDM={currentRoom.isDM}
+            roomCode={currentView.code}
+            isDM={currentView.isDM}
             onLeaveRoom={handleLeaveRoom}
           />
         </div>
@@ -65,11 +102,59 @@ function AppContent() {
     );
   }
 
-  // Fora de sala: renderiza menu principal com abas de Salas, Personagens e modo Local
-  return <PaginaMenuPrincipal onJoinRoom={handleJoinRoom} />;
+  // Lista de personagens
+  if (currentView.type === 'characters') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
+        <div className="container mx-auto px-4">
+          <CharacterList
+            onCreateNew={handleNavigateToCharacterCreate}
+            onViewCharacter={handleNavigateToCharacterView}
+            onBack={handleBackToMenu}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Criação de personagem - CORRIGIDO: Adicionado background consistente
+  if (currentView.type === 'character-create') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
+        <div className="container mx-auto px-4">
+          <CharacterCreationWizard
+            onComplete={handleNavigateToCharacterView}
+            onCancel={handleBackToCharacters}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Visualização de personagem
+  if (currentView.type === 'character-view') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
+        <div className="container mx-auto px-4">
+          <FichaPersonagemCompleta
+            characterId={currentView.characterId}
+            onBack={handleBackToCharacters}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Menu principal (padrão)
+  return (
+    <PaginaMenuPrincipal 
+      onJoinRoom={handleJoinRoom}
+      onNavigateToCharacters={handleNavigateToCharacters}
+    />
+  );
 }
 
-// Exporta a aplicação envelopada pelo AuthProvider para disponibilizar o contexto de auth
+// Exporta a aplicação envelopada pelo AuthProvider
 export default function App() {
   return (
     <AuthProvider>

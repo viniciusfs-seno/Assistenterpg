@@ -1,4 +1,4 @@
-// src/components/TrackerCombateSala.tsx — VERSÃO COMPLETA COM TODAS AS CORREÇÕES
+// src/components/TrackerCombateSala.tsx — COM CHAT EM TEMPO REAL
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
@@ -7,6 +7,7 @@ import { AddCombatantDialog } from "./AddPersonagemDialog";
 import { SelectExistingCharacterDialog } from "./AddPersonagemExistenteDialog";
 import { NPCLibrary } from "./BibliotecaNPC";
 import { DiceRoller } from "./RoladorDados";
+import { ChatSala } from "./ChatSala";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -66,12 +67,11 @@ type RoomData = {
   combatants: CombatantWithEffects[];
 };
 
-// ⬅️ MUDANÇA 2: Adicionar "Caído" aos efeitos
 const AVAILABLE_EFFECTS = [
   { id: 'poisoned', label: 'Envenenado', color: 'bg-green-700', icon: '☠️' },
   { id: 'burning', label: 'Em Chamas', color: 'bg-orange-600', icon: '🔥' },
   { id: 'paralyzed', label: 'Paralizado', color: 'bg-purple-600', icon: '⚡' },
-  { id: 'prone', label: 'Caído', color: 'bg-slate-600', icon: '🔻' }, // ⬅️ NOVO
+  { id: 'prone', label: 'Caído', color: 'bg-slate-600', icon: '🔻' },
 ];
 
 export function TrackerCombateSala({
@@ -79,7 +79,7 @@ export function TrackerCombateSala({
   isDM,
   onLeaveRoom,
 }: RoomCombatTrackerProps) {
-  const { getAccessToken, user } = useAuth();
+  const { getAccessToken, user, profile } = useAuth();
   const [combatants, setCombatants] = useState<CombatantWithEffects[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [combatStarted, setCombatStarted] = useState(false);
@@ -131,6 +131,7 @@ export function TrackerCombateSala({
       const roomData = response.room as RoomData;
 
       if (!isDM && roomData.status !== 'ACTIVE') {
+        alert('Esta sala está fechada. Apenas o mestre pode reabri-la.');
         onLeaveRoom();
         return;
       }
@@ -145,8 +146,13 @@ export function TrackerCombateSala({
       previousCombatStartedRef.current = roomData.combatStarted || false;
       setRound(roomData.round || 1);
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch room:", err);
+      if (!isDM && err.message?.includes('404')) {
+        alert('Esta sala foi excluída pelo mestre.');
+        onLeaveRoom();
+        return;
+      }
       setConnectionError("Erro ao carregar sala");
       setLoading(false);
     }
@@ -211,6 +217,12 @@ export function TrackerCombateSala({
         
         const roomData = payload.payload as RoomData;
         
+        if (!isDM && roomData.status === 'CLOSED') {
+          alert('A sala foi fechada pelo mestre. Você não pode mais entrar.');
+          onLeaveRoom();
+          return;
+        }
+        
         const currentPlayerCombatant = roomData.combatants.find(
           (c: CombatantWithEffects) => c.isPlayer && c.id.startsWith(`player_${user?.id}`)
         );
@@ -236,6 +248,18 @@ export function TrackerCombateSala({
         setRound(roomData.round || 1);
         
         if (!isDM && roomData.status !== 'ACTIVE') {
+          onLeaveRoom();
+        }
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'kv_store_9334e2c0',
+        filter: `key=eq.room:${roomCode}`
+      }, () => {
+        console.log('🗑️ Sala excluída do banco de dados');
+        if (!isDM) {
+          alert('A sala foi excluída pelo mestre.');
           onLeaveRoom();
         }
       })
@@ -271,7 +295,6 @@ export function TrackerCombateSala({
       }
     };
   }, [roomCode, isDM, user?.id]);
-
   const addCombatant = async (
     combatant: Omit<CombatantWithEffects, "id">,
   ) => {
@@ -376,7 +399,6 @@ export function TrackerCombateSala({
           (c.damageTaken || 0) + damageTaken;
       }
 
-      // ⬅️ MUDANÇA 4: Adiciona efeito "Caído" quando ficar morrendo
       if (
         updated.health === 0 &&
         c.health > 0 &&
@@ -386,7 +408,6 @@ export function TrackerCombateSala({
         updated.timesFallen = (c.timesFallen || 0) + 1;
         updated.fellOnRound = round;
         
-        // Adiciona condição "Caído" automaticamente
         const currentEffects = updated.effects || [];
         if (!currentEffects.includes('prone')) {
           updated.effects = [...currentEffects, 'prone'];
@@ -398,7 +419,6 @@ export function TrackerCombateSala({
         updated.isDeceased = false;
         updated.fellOnRound = null;
         updated.diedOnRound = null;
-        // ⬅️ NÃO remove "Caído" ao reviver (deve ser manual)
       }
       
       if (updated.isDeceased && !c.isDeceased) {
@@ -450,7 +470,6 @@ export function TrackerCombateSala({
             isDeceased: false,
             fellOnRound: null,
             diedOnRound: null,
-            // ⬅️ NÃO remove "Caído" ao reviver
           }
         : c,
     );
@@ -693,7 +712,6 @@ export function TrackerCombateSala({
     });
   };
   
-  // ⬅️ MUDANÇA 1: Remove badge "Morrendo" para mestre, mostra apenas na ordem de iniciativa
   const getStatusBadges = (c: CombatantWithEffects) => {
     const badges = [];
     const isWounded = c.health > 0 && c.health <= c.maxHealth * 0.5;
@@ -701,7 +719,6 @@ export function TrackerCombateSala({
     if (c.isDeceased) {
       badges.push(<Badge key="deceased" className="bg-red-600">Morto</Badge>);
     } else if (c.health === 0) {
-      // ⬅️ NÃO mostra badge "Morrendo" aqui (redundante com "Morrendo (X)")
       if (isWounded) {
         badges.push(<Badge key="wounded" className="bg-yellow-600">Machucado</Badge>);
       }
@@ -763,12 +780,292 @@ export function TrackerCombateSala({
       )}
     </div>
   );
-
+  // VIEW DO JOGADOR com layout 3 colunas
   if (!isDM) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex gap-6 max-w-[1800px] mx-auto p-6">
+        {/* COLUNA ESQUERDA - Placeholder */}
+        <div className="w-[300px] flex-shrink-0">
+          <Card className="bg-slate-800/50 border-slate-700 p-6 h-[calc(100vh-120px)] flex items-center justify-center">
+            <p className="text-slate-500 text-center text-sm">
+              Ficha Completa
+              <br />
+              <span className="text-xs">(Em breve)</span>
+            </p>
+          </Card>
+        </div>
+
+        {/* COLUNA CENTRAL - Conteúdo Principal */}
+        <div className="flex-1 space-y-6">
+          <Card className="p-4 bg-slate-800/50 border-slate-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onLeaveRoom}
+                  className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Sair
+                </Button>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-blue-600">
+                      <Users className="w-3 h-3 mr-1" />
+                      Jogador
+                    </Badge>
+                    <span className="text-slate-400">
+                      Sala: {roomCode}
+                    </span>
+                    <ConnectionIndicator />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <DiceRoller />
+
+          {combatStarted && (
+            <Alert className="bg-slate-800/50 border-slate-700">
+              <AlertDescription className="text-center text-white">
+                Round {round}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!playerCombatant && (
+            <Card className="p-6 bg-slate-800/50 border-slate-700">
+              <div className="text-center space-y-4">
+                <div className="text-slate-400">
+                  <p>Você ainda não adicionou seu personagem</p>
+                </div>
+                <div className="flex gap-2 justify-center">
+                  <AddCombatantDialog 
+                    onAdd={addCombatant}
+                    showSaveToggle={true}
+                    onSaveCharacter={saveCharacterToList}
+                  />
+                  <SelectExistingCharacterDialog
+                    onSelect={addCombatant}
+                  />
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {playerCombatant && (
+            <div>
+              <h3 className="text-slate-300 mb-3">
+                Seu Personagem
+              </h3>
+              <CombatantCard
+                combatant={playerCombatant}
+                isCurrentTurn={
+                  combatStarted &&
+                  activeCombatants[currentTurnIndex]?.id ===
+                    playerCombatant.id
+                }
+                onUpdate={updateCombatant}
+                onRemove={removeCombatant}
+                isDM={false}
+                isOwner={true}
+              />
+
+              {combatStarted && sortedCombatants.length > 0 && (
+                <Card className="p-4 bg-slate-800/50 border-slate-700 mt-4">
+                  <h4 className="text-slate-300 mb-2">
+                    Ordem de Iniciativa
+                  </h4>
+                  <div className="space-y-2">
+                    {sortedCombatants.map((c, idx) => {
+                      const isCurrentTurn = activeCombatants[currentTurnIndex]?.id === c.id;
+                      const isDying = c.health === 0 && !c.isDeceased;
+                      const isGoingInsane = c.sanity === 0 && !c.isInsane && c.insanitySaveCount !== undefined;
+                      const isWounded = c.health > 0 && c.health <= c.maxHealth * 0.5;
+                      
+                      return (
+                        <div
+                          key={c.id}
+                          className={`flex items-center justify-between p-2 rounded transition-all ${
+                            isCurrentTurn
+                              ? 'bg-blue-600/40 border-2 border-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'bg-slate-700/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-slate-300 text-sm">
+                              {idx + 1}.
+                            </span>
+                            <span className={`${isCurrentTurn ? 'text-white font-bold' : 'text-white'}`}>
+                              {c.name}
+                            </span>
+                            {isCurrentTurn && (
+                              <Badge className="bg-yellow-600 ml-2">
+                                Turno Atual
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-1 flex-wrap">
+                            {c.isDeceased ? (
+                              <Badge className="bg-red-600">Morto</Badge>
+                            ) : isDying ? (
+                              <Badge className="bg-orange-600">Morrendo</Badge>
+                            ) : (
+                              <Badge className="bg-green-600">Vivo</Badge>
+                            )}
+                            
+                            {!c.isDeceased && !isDying && isWounded && (
+                              <Badge className="bg-yellow-600">Machucado</Badge>
+                            )}
+                            
+                            {isGoingInsane && (
+                              <Badge 
+                                className="text-white shadow-lg font-semibold"
+                                style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+                              >
+                                Enlouquecendo
+                              </Badge>
+                            )}
+                            
+                            {c.isInsane && (
+                              <Badge 
+                                className="text-white shadow-lg font-semibold"
+                                style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+                              >
+                                Enlouqueceu
+                              </Badge>
+                            )}
+                            
+                            {getEffectBadges(c)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          <Dialog open={showPlayerReport} onOpenChange={setShowPlayerReport}>
+            <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  <Flag className="w-6 h-6 text-green-400" />
+                  Combate Finalizado!
+                </DialogTitle>
+                <DialogDescription className="text-slate-400">
+                  Resumo da sua performance
+                </DialogDescription>
+              </DialogHeader>
+
+              {playerReportData && (
+                <div className="space-y-6 p-4">
+                  <Alert className="bg-blue-900/30 border-blue-700">
+                    <AlertDescription className="text-center">
+                      <div className="text-lg font-bold text-white mb-1">
+                        {playerReportData.character.name}
+                      </div>
+                      <div className="text-sm text-slate-300">
+                        {playerReportData.character.isDeceased && playerReportData.character.diedOnRound ? (
+                          <>Morreu no Round {playerReportData.character.diedOnRound}</>
+                        ) : playerReportData.character.isDeceased && !playerReportData.character.wasAliveAtStart ? (
+                          <>Estava morto durante todo o combate</>
+                        ) : (
+                          <>Sobreviveu até o Round {playerReportData.roundEnded}</>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+
+                  <Card className="p-4 bg-slate-700/50 border-slate-600">
+                    <h4 className="text-white font-semibold mb-3">Estatísticas Finais</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-slate-400 text-sm">HP Final</div>
+                        <div className="text-white text-lg font-bold">
+                          {playerReportData.character.health} / {playerReportData.character.maxHealth}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-sm">Status</div>
+                        <div className="flex gap-1 flex-wrap">
+                          {getStatusBadges(playerReportData.character)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-sm">Dano Recebido</div>
+                        <div className="text-red-400 text-lg font-bold">
+                          {playerReportData.character.damageTaken || 0}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-sm">Vezes Caído</div>
+                        <div className="text-orange-400 text-lg font-bold">
+                          {playerReportData.character.timesFallen || 0}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {playerReportData.character.isDeceased && playerReportData.character.wasAliveAtStart && (
+                    <Alert variant="destructive" className="bg-red-900/20 border-red-700">
+                      <AlertDescription className="text-center">
+                        Seu personagem morreu durante o combate
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 p-4">
+                <Button
+                  onClick={() => {
+                    setShowPlayerReport(false);
+                    setPlayerReportData(null);
+                  }}
+                  className="bg-green-700 hover:bg-green-600"
+                >
+                  Entendido
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* COLUNA DIREITA - Chat */}
+        <div className="w-[350px] flex-shrink-0">
+          <ChatSala
+            roomCode={roomCode}
+            currentUserId={user?.id || ''}
+            currentUserName={profile?.nickname || playerCombatant?.name || user?.email?.split('@')[0] || 'Anônimo'}
+            isDM={false}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // VIEW DO MESTRE com layout 3 colunas
+  return (
+    <div className="flex gap-6 max-w-[1800px] mx-auto p-6">
+      {/* COLUNA ESQUERDA - Placeholder */}
+      <div className="w-[300px] flex-shrink-0">
+        <Card className="bg-slate-800/50 border-slate-700 p-6 h-[calc(100vh-120px)] flex items-center justify-center">
+          <p className="text-slate-500 text-center text-sm">
+            Ficha Completa
+            <br />
+            <span className="text-xs">(Em breve)</span>
+          </p>
+        </Card>
+      </div>
+
+      {/* COLUNA CENTRAL - Conteúdo Principal */}
+      <div className="flex-1 space-y-6">
         <Card className="p-4 bg-slate-800/50 border-slate-700">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
@@ -779,18 +1076,105 @@ export function TrackerCombateSala({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Sair
               </Button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-blue-600">
-                    <Users className="w-3 h-3 mr-1" />
-                    Jogador
-                  </Badge>
-                  <span className="text-slate-400">
-                    Sala: {roomCode}
-                  </span>
-                  <ConnectionIndicator />
-                </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-purple-600">
+                  <Crown className="w-3 h-3 mr-1" />
+                  Mestre
+                </Badge>
+                <span className="text-slate-400">
+                  Sala: {roomCode}
+                </span>
+                <ConnectionIndicator />
               </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex gap-2 flex-wrap">
+              <AddCombatantDialog 
+                onAdd={addCombatant}
+                showSaveToggle={true}
+                onSaveCharacter={saveCharacterToList}
+              />
+              <SelectExistingCharacterDialog
+                onSelect={addCombatant}
+              />
+              <NPCLibrary onSelectNPC={handleSelectNPC} />
+              {!combatStarted ? (
+                <Button
+                  onClick={startCombat}
+                  disabled={combatants.length === 0}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Iniciar Combate
+                </Button>
+              ) : (
+                <Button
+                  onClick={nextTurn}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Swords className="w-4 h-4 mr-2" />
+                  Próximo Turno
+                </Button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {combatStarted && (
+                <>
+                  <Button
+                    onClick={endCombat}
+                    variant="outline"
+                    className="border-red-600 text-red-400 hover:bg-red-900/20"
+                  >
+                    <Flag className="w-4 h-4 mr-2" />
+                    Encerrar Combate
+                  </Button>
+
+                  <Button
+                    onClick={resetCombat}
+                    variant="outline"
+                    className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                </>
+              )}
+
+              <Button
+                onClick={() => setShowReportsList(true)}
+                variant="outline"
+                className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
+              >
+                📜 Ver Relatórios de Combate
+              </Button>
+
+              <Button
+                onClick={clearAll}
+                variant="outline"
+                className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600 disabled:opacity-50"
+                disabled={combatants.length === 0}
+              >
+                Limpar
+              </Button>
+
+              <Button
+                onClick={async () => {
+                  if (confirm('Tem certeza que deseja fechar esta sala? Os jogadores não poderão mais entrar, mas você pode reabri-la depois.')) {
+                    await updateRoomData({ status: 'CLOSED' });
+                    onLeaveRoom();
+                  }
+                }}
+                variant="outline"
+                className="text-white border-2 shadow-lg"
+                style={{ backgroundColor: '#b91c1c', borderColor: '#dc2626' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+              >
+                Fechar Sala
+              </Button>
             </div>
           </div>
         </Card>
@@ -805,497 +1189,203 @@ export function TrackerCombateSala({
           </Alert>
         )}
 
-        {!playerCombatant && (
-          <Card className="p-6 bg-slate-800/50 border-slate-700">
-            <div className="text-center space-y-4">
-              <div className="text-slate-400">
-                <p>Você ainda não adicionou seu personagem</p>
-              </div>
-              <div className="flex gap-2 justify-center">
-                <AddCombatantDialog 
-                  onAdd={addCombatant}
-                  showSaveToggle={true}
-                  onSaveCharacter={saveCharacterToList}
-                />
-                <SelectExistingCharacterDialog
-                  onSelect={addCombatant}
-                />
-              </div>
+        {sortedCombatants.length === 0 ? (
+          <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
+            <div className="text-center text-slate-500">
+              <Swords className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhum personagem adicionado</p>
+              <p className="text-sm mt-2">
+                Adicione personagens ou NPCs para começar
+              </p>
             </div>
           </Card>
-        )}
-
-        {playerCombatant && (
-          <div>
-            <h3 className="text-slate-300 mb-3">
-              Seu Personagem
-            </h3>
-            <CombatantCard
-              combatant={playerCombatant}
-              isCurrentTurn={
-                combatStarted &&
-                activeCombatants[currentTurnIndex]?.id ===
-                  playerCombatant.id
-              }
-              onUpdate={updateCombatant}
-              onRemove={removeCombatant}
-              isDM={false}
-              isOwner={true}
-            />
-
-            {combatStarted && sortedCombatants.length > 0 && (
-              <Card className="p-4 bg-slate-800/50 border-slate-700 mt-4">
-                <h4 className="text-slate-300 mb-2">
-                  Ordem de Iniciativa
-                </h4>
-                <div className="space-y-2">
-                  {sortedCombatants.map((c, idx) => {
-                    const isCurrentTurn = activeCombatants[currentTurnIndex]?.id === c.id;
-                    const isDying = c.health === 0 && !c.isDeceased;
-                    const isGoingInsane = c.sanity === 0 && !c.isInsane && c.insanitySaveCount !== undefined;
-                    
-                    return (
-                      <div
-                        key={c.id}
-                        className={`flex items-center justify-between p-2 rounded transition-all ${
-                          isCurrentTurn
-                            ? 'bg-blue-600/40 border-2 border-blue-500 shadow-lg shadow-blue-500/20'
-                            : 'bg-slate-700/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-slate-300 text-sm">
-                            {idx + 1}.
-                          </span>
-                          <span className={`${isCurrentTurn ? 'text-white font-bold' : 'text-white'}`}>
-                            {c.name}
-                          </span>
-                          {isCurrentTurn && (
-                            <Badge className="bg-yellow-600 ml-2">
-                              Turno Atual
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex gap-1 flex-wrap">
-                          {c.isDeceased ? (
-                            <Badge className="bg-red-600">
-                              Morto
-                            </Badge>
-                          ) : isDying ? (
-                            <Badge className="bg-orange-600">
-                              Morrendo
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-600">
-                              Vivo
-                            </Badge>
-                          )}
-                          
-                          {/* ⬅️ MUDANÇA 3: Mostra Enlouquecendo para jogadores */}
-                          {isGoingInsane && (
-                            <Badge 
-                              className="text-white shadow-lg font-semibold"
-                              style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
-                            >
-                              Enlouquecendo
-                            </Badge>
-                          )}
-                          
-                          {getEffectBadges(c)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
+        ) : (
+          <div className="space-y-3">
+            {sortedCombatants.map((combatant) => (
+              <div key={combatant.id} className="space-y-2">
+                <CombatantCard
+                  combatant={combatant}
+                  isCurrentTurn={
+                    combatStarted &&
+                    activeCombatants[currentTurnIndex]?.id ===
+                      combatant.id
+                  }
+                  onUpdate={updateCombatant}
+                  onRemove={removeCombatant}
+                  onRevive={reviveCombatant}
+                  onTreatInsanity={treatInsanity}
+                  isDM={isDM}
+                />
+                {isDM && !combatant.isDeceased && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedCombatantForEffects(combatant.id);
+                      setShowEffectsDialog(true);
+                    }}
+                    className="w-full bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
+                  >
+                    ⚡ Gerenciar Efeitos
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
-        <Dialog open={showPlayerReport} onOpenChange={setShowPlayerReport}>
-          <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+        {/* Dialogs do Mestre */}
+        <Dialog open={showEffectsDialog} onOpenChange={setShowEffectsDialog}>
+          <DialogContent className="max-w-md bg-slate-800 border-slate-700 text-white">
             <DialogHeader>
-              <DialogTitle className="text-2xl flex items-center gap-2">
-                <Flag className="w-6 h-6 text-green-400" />
-                Combate Finalizado!
-              </DialogTitle>
+              <DialogTitle>Gerenciar Efeitos</DialogTitle>
               <DialogDescription className="text-slate-400">
-                Resumo da sua performance
+                {selectedCombatantForEffects && 
+                  combatants.find(c => c.id === selectedCombatantForEffects)?.name}
               </DialogDescription>
             </DialogHeader>
 
-            {playerReportData && (
-              <div className="space-y-6 p-4">
-                <Alert className="bg-blue-900/30 border-blue-700">
-                  <AlertDescription className="text-center">
-                    <div className="text-lg font-bold text-white mb-1">
-                      {playerReportData.character.name}
-                    </div>
-                    <div className="text-sm text-slate-300">
-                      {playerReportData.character.isDeceased && playerReportData.character.diedOnRound ? (
-                        <>Morreu no Round {playerReportData.character.diedOnRound}</>
-                      ) : playerReportData.character.isDeceased && !playerReportData.character.wasAliveAtStart ? (
-                        <>Estava morto durante todo o combate</>
-                      ) : (
-                        <>Sobreviveu até o Round {playerReportData.roundEnded}</>
-                      )}
-                    </div>
-                  </AlertDescription>
-                </Alert>
+            <div className="space-y-3 p-4">
+              {AVAILABLE_EFFECTS.map(effect => {
+                const combatant = combatants.find(c => c.id === selectedCombatantForEffects);
+                const hasEffect = combatant?.effects?.includes(effect.id) || false;
+                
+                return (
+                  <Button
+                    key={effect.id}
+                    variant={hasEffect ? "default" : "outline"}
+                    className={`w-full justify-start ${hasEffect ? effect.color : 'bg-slate-700 border-slate-500 text-white'}`}
+                    onClick={() => {
+                      if (selectedCombatantForEffects) {
+                        toggleEffect(selectedCombatantForEffects, effect.id);
+                      }
+                    }}
+                  >
+                    <span className="mr-2">{effect.icon}</span>
+                    {effect.label}
+                    {hasEffect && <span className="ml-auto">✓</span>}
+                  </Button>
+                );
+              })}
+            </div>
 
-                <Card className="p-4 bg-slate-700/50 border-slate-600">
-                  <h4 className="text-white font-semibold mb-3">Estatísticas Finais</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-slate-400 text-sm">HP Final</div>
-                      <div className="text-white text-lg font-bold">
-                        {playerReportData.character.health} / {playerReportData.character.maxHealth}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400 text-sm">Status</div>
-                      <div className="flex gap-1 flex-wrap">
-                        {getStatusBadges(playerReportData.character)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400 text-sm">Dano Recebido</div>
-                      <div className="text-red-400 text-lg font-bold">
-                        {playerReportData.character.damageTaken || 0}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400 text-sm">Vezes Caído</div>
-                      <div className="text-orange-400 text-lg font-bold">
-                        {playerReportData.character.timesFallen || 0}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {playerReportData.character.isDeceased && playerReportData.character.wasAliveAtStart && (
-                  <Alert variant="destructive" className="bg-red-900/20 border-red-700">
-                    <AlertDescription className="text-center">
-                      Seu personagem morreu durante o combate
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 p-4">
+            <div className="flex justify-end p-4">
               <Button
                 onClick={() => {
-                  setShowPlayerReport(false);
-                  setPlayerReportData(null);
+                  setShowEffectsDialog(false);
+                  setSelectedCombatantForEffects(null);
                 }}
                 className="bg-green-700 hover:bg-green-600"
               >
-                Entendido
+                Fechar
               </Button>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    );
-  }
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Card className="p-4 bg-slate-800/50 border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onLeaveRoom}
-              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
-            <div className="flex items-center gap-2">
-              <Badge className="bg-purple-600">
-                <Crown className="w-3 h-3 mr-1" />
-                Mestre
-              </Badge>
-              <span className="text-slate-400">
-                Sala: {roomCode}
-              </span>
-              <ConnectionIndicator />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex gap-2 flex-wrap">
-            <AddCombatantDialog 
-              onAdd={addCombatant}
-              showSaveToggle={true}
-              onSaveCharacter={saveCharacterToList}
-            />
-            <SelectExistingCharacterDialog
-              onSelect={addCombatant}
-            />
-            <NPCLibrary onSelectNPC={handleSelectNPC} />
-            {!combatStarted ? (
-              <Button
-                onClick={startCombat}
-                disabled={combatants.length === 0}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Iniciar Combate
-              </Button>
-            ) : (
-              <Button
-                onClick={nextTurn}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Swords className="w-4 h-4 mr-2" />
-                Próximo Turno
-              </Button>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            {combatStarted && (
-              <>
-                <Button
-                  onClick={endCombat}
-                  variant="outline"
-                  className="border-red-600 text-red-400 hover:bg-red-900/20"
-                >
-                  <Flag className="w-4 h-4 mr-2" />
-                  Encerrar Combate
-                </Button>
-
-                <Button
-                  onClick={resetCombat}
-                  variant="outline"
-                  className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Reset
-                </Button>
-              </>
-            )}
-
-            <Button
-              onClick={() => setShowReportsList(true)}
-              variant="outline"
-              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
-            >
-              📜 Ver Relatórios de Combate
-            </Button>
-
-            <Button
-              onClick={clearAll}
-              variant="outline"
-              className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600 disabled:opacity-50"
-              disabled={combatants.length === 0}
-            >
-              Limpar
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <DiceRoller />
-
-      {combatStarted && (
-        <Alert className="bg-slate-800/50 border-slate-700">
-          <AlertDescription className="text-center text-white">
-            Round {round}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {sortedCombatants.length === 0 ? (
-        <Card className="p-12 bg-slate-800/30 border-slate-700 border-dashed">
-          <div className="text-center text-slate-500">
-            <Swords className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhum personagem adicionado</p>
-            <p className="text-sm mt-2">
-              Adicione personagens ou NPCs para começar
-            </p>
-          </div>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {sortedCombatants.map((combatant) => (
-            <div key={combatant.id} className="space-y-2">
-              <CombatantCard
-                combatant={combatant}
-                isCurrentTurn={
-                  combatStarted &&
-                  activeCombatants[currentTurnIndex]?.id ===
-                    combatant.id
-                }
-                onUpdate={updateCombatant}
-                onRemove={removeCombatant}
-                onRevive={reviveCombatant}
-                onTreatInsanity={treatInsanity}
-                isDM={isDM}
-              />
-              {isDM && !combatant.isDeceased && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedCombatantForEffects(combatant.id);
-                    setShowEffectsDialog(true);
-                  }}
-                  className="w-full bg-slate-700 border-slate-500 text-white hover:bg-slate-600"
-                >
-                  ⚡ Gerenciar Efeitos
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={showEffectsDialog} onOpenChange={setShowEffectsDialog}>
-        <DialogContent className="max-w-md bg-slate-800 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Efeitos</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              {selectedCombatantForEffects && 
-                combatants.find(c => c.id === selectedCombatantForEffects)?.name}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 p-4">
-            {AVAILABLE_EFFECTS.map(effect => {
-              const combatant = combatants.find(c => c.id === selectedCombatantForEffects);
-              const hasEffect = combatant?.effects?.includes(effect.id) || false;
-              
-              return (
-                <Button
-                  key={effect.id}
-                  variant={hasEffect ? "default" : "outline"}
-                  className={`w-full justify-start ${hasEffect ? effect.color : 'border-slate-600'}`}
-                  onClick={() => {
-                    if (selectedCombatantForEffects) {
-                      toggleEffect(selectedCombatantForEffects, effect.id);
-                    }
-                  }}
-                >
-                  <span className="mr-2">{effect.icon}</span>
-                  {effect.label}
-                  {hasEffect && <span className="ml-auto">✓</span>}
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="flex justify-end p-4">
-            <Button
-              onClick={() => {
-                setShowEffectsDialog(false);
-                setSelectedCombatantForEffects(null);
-              }}
-              className="bg-green-700 hover:bg-green-600"
-            >
-              Fechar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Resto dos dialogs iguais... */}
-      <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
-            <DialogDescription className="text-slate-400">Round {round} completado</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 p-4">
-            {combatants.map((c) => (
-              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-white font-medium">{c.name}</div>
-                    <div className="text-xs text-slate-400">Final HP: {c.health}/{c.maxHealth}</div>
-                  </div>
-                  <div className="text-sm text-slate-300">
-                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
-                    {c.isDeceased && <div className="text-red-400">Morto</div>}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2 p-4">
-            <Button variant="outline" onClick={() => setShowCombatReport(false)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
-            <Button onClick={() => { setShowCombatReport(false); resetCombat(); }} className="bg-green-700 hover:bg-green-600">Novo Combate</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle>Relatórios Salvos</DialogTitle>
-            <DialogDescription className="text-slate-400">Relatórios de combates anteriores (localStorage)</DialogDescription>
-          </DialogHeader>
-          <div className="p-4 space-y-3">
-            {battleReports.length === 0 ? (
-              <div className="text-slate-400">Nenhum relatório salvo.</div>
-            ) : (
-              battleReports.map((r: any) => (
-                <Card key={r.id} className="p-3 bg-slate-700/50 border-slate-600">
-                  <div className="flex justify-between">
+        <Dialog open={showCombatReport} onOpenChange={setShowCombatReport}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
+              <DialogDescription className="text-slate-400">Round {round} completado</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 p-4">
+              {combatants.map((c) => (
+                <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
+                  <div className="flex justify-between items-center">
                     <div>
-                      <div className="text-white font-medium">{new Date(r.timestamp).toLocaleString()}</div>
-                      <div className="text-xs text-slate-400">Rounds: {r.roundEnded}</div>
+                      <div className="text-white font-medium">{c.name}</div>
+                      <div className="text-xs text-slate-400">Final HP: {c.health}/{c.maxHealth}</div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedReport(r)}>Ver</Button>
-                      <Button size="sm" variant="destructive" onClick={() => persistReports(battleReports.filter((br) => br.id !== r.id))}>Excluir</Button>
+                    <div className="text-sm text-slate-300">
+                      Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                      {c.isDeceased && <div className="text-red-400">Morto</div>}
                     </div>
                   </div>
                 </Card>
-              ))
-            )}
-          </div>
-          <div className="p-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => persistReports([])} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Limpar todos</Button>
-            <Button onClick={() => setShowReportsList(false)} className="bg-green-700 hover:bg-green-600">Fechar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 p-4">
+              <Button variant="outline" onClick={() => setShowCombatReport(false)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
+              <Button onClick={() => { setShowCombatReport(false); resetCombat(); }} className="bg-green-700 hover:bg-green-600">Novo Combate</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              {selectedReport && new Date(selectedReport.timestamp).toLocaleString()} - Round {selectedReport?.roundEnded}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 p-4">
-            {selectedReport?.combatants.map((c: any) => (
-              <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-white font-medium">{c.name}</div>
-                    <div className="text-xs text-slate-400">Final HP: {c.finalHP}</div>
+        <Dialog open={showReportsList} onOpenChange={setShowReportsList}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+            <DialogHeader>
+              <DialogTitle>Relatórios Salvos</DialogTitle>
+              <DialogDescription className="text-slate-400">Relatórios de combates anteriores (localStorage)</DialogDescription>
+            </DialogHeader>
+            <div className="p-4 space-y-3">
+              {battleReports.length === 0 ? (
+                <div className="text-slate-400">Nenhum relatório salvo.</div>
+              ) : (
+                battleReports.map((r: any) => (
+                  <Card key={r.id} className="p-3 bg-slate-700/50 border-slate-600">
+                    <div className="flex justify-between">
+                      <div>
+                        <div className="text-white font-medium">{new Date(r.timestamp).toLocaleString()}</div>
+                        <div className="text-xs text-slate-400">Rounds: {r.roundEnded}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setSelectedReport(r)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Ver</Button>
+                        <Button size="sm" variant="destructive" onClick={() => persistReports(battleReports.filter((br) => br.id !== r.id))}>Excluir</Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+            <div className="p-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => persistReports([])} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Limpar todos</Button>
+              <Button onClick={() => setShowReportsList(false)} className="bg-green-700 hover:bg-green-600">Fechar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-800 border-slate-700 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">Relatório do Combate</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                {selectedReport && new Date(selectedReport.timestamp).toLocaleString()} - Round {selectedReport?.roundEnded}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 p-4">
+              {selectedReport?.combatants.map((c: any) => (
+                <Card key={c.id} className="p-3 bg-slate-700/50 border-slate-600">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-white font-medium">{c.name}</div>
+                      <div className="text-xs text-slate-400">Final HP: {c.finalHP}</div>
+                    </div>
+                    <div className="text-sm text-slate-300">
+                      Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
+                      {c.died && <div className="text-red-400">Morto</div>}
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-300">
-                    Dano: {c.damageTaken || 0} | Quedas: {c.timesFallen || 0}
-                    {c.died && <div className="text-red-400">Morto</div>}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2 p-4">
-            <Button variant="outline" onClick={() => setSelectedReport(null)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+                </Card>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 p-4">
+              <Button variant="outline" onClick={() => setSelectedReport(null)} className="bg-slate-700 border-slate-500 text-white hover:bg-slate-600">Fechar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* COLUNA DIREITA - Chat */}
+      <div className="w-[350px] flex-shrink-0">
+        <ChatSala
+          roomCode={roomCode}
+          currentUserId={user?.id || ''}
+          currentUserName={profile?.nickname || user?.email?.split('@')[0] || 'Mestre'}
+          isDM={true}
+        />
+      </div>
+
     </div>
   );
 }

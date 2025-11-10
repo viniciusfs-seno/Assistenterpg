@@ -227,36 +227,33 @@ export function CombatantCard({
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className={`text-white ${isDeceased ? "line-through" : ""}`}>{combatant.name}</h3>
-                <Badge variant={combatant.isPlayer ? "default" : "secondary"} className={combatant.isPlayer ? "bg-blue-600" : "bg-red-600"}>
-                  {combatant.isPlayer ? (<><Shield className="w-3 h-3 mr-1" /> Player</>) : (<><Sword className="w-3 h-3 mr-1" /> NPC</>)}
+              <h3 className={`text-white ${isDeceased ? "line-through" : ""}`}>{combatant.name}</h3>
+              <Badge variant={combatant.isPlayer ? "default" : "secondary"} className={combatant.isPlayer ? "bg-blue-600" : "bg-red-600"}>
+                {combatant.isPlayer ? (<><Shield className="w-3 h-3 mr-1" /> Player</>) : (<><Sword className="w-3 h-3 mr-1" /> NPC</>)}
+              </Badge>
+              
+              {/* ⬅️ MUDANÇA: Mostra badges de status SEMPRE (não só para mestre) */}
+              {getStatusBadges()}
+              {getEffectBadges()}
+              
+              {isCurrentTurn && !isDeceased && (<Badge className="bg-yellow-600">Turno Atual</Badge>)}
+              
+              {isDead && !isDeceased && combatant.deathSaveCount !== undefined && (
+                <Badge className="bg-orange-600 text-white border-2 border-orange-400 shadow-lg">
+                  <HeartPulse className="w-3 h-3 mr-1" />Morrendo ({combatant.deathSaveCount})
                 </Badge>
-                
-                {isDM && (
-                  <>
-                    {getStatusBadges()}
-                    {getEffectBadges()}
-                  </>
-                )}
-                
-                {isCurrentTurn && !isDeceased && (<Badge className="bg-yellow-600">Turno Atual</Badge>)}
-                
-                {/* ⬅️ MUDANÇA 1: Trocar "Morte em X turnos" por "Morrendo (X)" */}
-                {isDead && !isDeceased && combatant.deathSaveCount !== undefined && (
-                  <Badge className="bg-orange-600 text-white border-2 border-orange-400 shadow-lg">
-                    <HeartPulse className="w-3 h-3 mr-1" />Morrendo ({combatant.deathSaveCount})
-                  </Badge>
-                )}
-                
-                {isGoingInsane && (
-                  <Badge 
-                    className="text-white border-2 shadow-lg font-semibold"
-                    style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
-                  >
-                    <Brain className="w-3 h-3 mr-1" />Enlouquecendo ({combatant.insanitySaveCount})
-                  </Badge>
-                )}
-              </div>
+              )}
+              
+              {isGoingInsane && (
+                <Badge 
+                  className="text-white border-2 shadow-lg font-semibold"
+                  style={{ backgroundColor: '#ec4899', borderColor: '#f472b6' }}
+                >
+                  <Brain className="w-3 h-3 mr-1" />Enlouquecendo ({combatant.insanitySaveCount})
+                </Badge>
+              )}
+            </div>
+
             </div>
           </div>
 
