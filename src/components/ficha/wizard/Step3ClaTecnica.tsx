@@ -1,4 +1,4 @@
-// src/components/ficha/wizard/Step3ClaTecnica.tsx - COMPLETO
+// src/components/ficha/wizard/Step3ClaTecnica.tsx - COM SCROLL
 
 import { useState, useMemo } from 'react';
 import { Card } from '../../ui/card';
@@ -30,14 +30,17 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
     updateData({ tecnicaInataId: tecnicaId });
   };
 
+  const claData = CLAS.find(c => c.id === selectedCla);
+
   const tecnicasDisponiveis = useMemo(() => {
     let tecnicas = TECNICAS_INATAS;
-
+    
     if (selectedCla !== 'sem_cla') {
       const claData = CLAS.find(c => c.id === selectedCla);
+      
       if (claData?.tecnicasHereditarias) {
         tecnicas = TECNICAS_INATAS.filter(t => 
-          (t.tipo === 'hereditaria' && t.cla === selectedCla) ||
+          (t.tipo === 'hereditaria' && t.cla === selectedCla) || 
           t.tipo === 'nao_hereditaria'
         );
       } else {
@@ -46,31 +49,34 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
     } else {
       tecnicas = TECNICAS_INATAS.filter(t => t.tipo === 'nao_hereditaria');
     }
-
-    if (searchTecnica) {
-      tecnicas = tecnicas.filter(t =>
-        t.nome.toLowerCase().includes(searchTecnica.toLowerCase())
-      );
-    }
-
+    
     return tecnicas;
-  }, [selectedCla, searchTecnica]);
+  }, [selectedCla]);
 
-  const claData = CLAS.find(c => c.id === selectedCla);
+  const tecnicasFiltradas = tecnicasDisponiveis.filter(t =>
+    t.nome.toLowerCase().includes(searchTecnica.toLowerCase())
+  );
 
   return (
     <div className="space-y-8">
-      {/* Seção de Clãs */}
+      {/* ========== SEÇÃO DE CLÃS COM SCROLL ========== */}
       <div>
-        <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-          <Crown className="w-5 h-5 text-yellow-500" />
+        <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+          <Crown className="w-6 h-6 text-yellow-500" />
           Escolha seu Clã
         </h3>
-        <p className="text-slate-400 mb-4">
+        <p className="mb-6" style={{ color: '#cbd5e1' }}>
           Seu clã determina acesso a técnicas hereditárias e prestígio inicial.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div 
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          style={{
+            maxHeight: '500px',
+            overflowY: 'auto',
+            paddingRight: '8px'
+          }}
+        >
           {CLAS.map((cla) => {
             const isSelected = selectedCla === cla.id;
             const isGrandeCla = cla.grandesClas;
@@ -81,33 +87,48 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
                 onClick={() => handleClaSelect(cla.id)}
                 className={`cursor-pointer transition-all p-4 ${
                   isSelected
-                    ? 'bg-yellow-900/30 border-yellow-500 ring-2 ring-yellow-500'
-                    : 'bg-slate-900 border-slate-700 hover:border-slate-600'
+                    ? 'bg-yellow-900/20'
+                    : 'bg-slate-800/50 border-slate-700 hover:border-yellow-600'
                 }`}
+                style={isSelected ? {
+                  borderColor: '#ef4444',
+                  borderWidth: '2px',
+                  boxShadow: '0 0 0 2px rgba(239, 68, 68, 0.25)'
+                } : {}}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {isGrandeCla && <Crown className="w-5 h-5 text-yellow-500" />}
                     <h4 className="text-lg font-semibold text-white">{cla.nome}</h4>
+                    {isSelected && <CheckCircle className="w-5 h-5" style={{ color: '#ef4444' }} />}
                   </div>
-                  {isSelected && <CheckCircle className="w-5 h-5 text-yellow-500" />}
                 </div>
 
-                <p className="text-sm text-slate-400 mb-3">{cla.descricao}</p>
+                <p className="text-sm mb-3" style={{ color: '#cbd5e1' }}>
+                  {cla.descricao}
+                </p>
 
                 {isGrandeCla && (
-                  <span 
-                    className="inline-block px-2 py-1 rounded-md text-xs font-medium text-center border"
-                    style={{ backgroundColor: '#713f12', color: '#fde047', borderColor: '#a16207' }}
+                  <div 
+                    className="text-sm px-3 py-1.5 rounded mb-2"
+                    style={{ 
+                      backgroundColor: 'rgba(202, 138, 4, 0.15)', 
+                      color: '#fbbf24',
+                      border: '1px solid rgba(251, 191, 36, 0.4)',
+                      display: 'block',
+                      textAlign: 'center',
+                      fontWeight: '600'
+                    }}
                   >
                     Grande Clã
-                  </span>
+                  </div>
                 )}
 
                 {cla.tecnicasHereditarias && cla.tecnicasHereditarias.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-700">
-                    <p className="text-xs text-slate-500 mb-1">Técnicas Hereditárias:</p>
-                    <p className="text-xs text-slate-300">
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold" style={{ color: '#d97706' }}>
+                      Técnicas Hereditárias:
+                    </p>
+                    <p className="text-xs" style={{ color: '#f59e0b' }}>
                       {cla.tecnicasHereditarias.length} disponível(is)
                     </p>
                   </div>
@@ -118,82 +139,108 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
         </div>
       </div>
 
-      {/* Seção de Técnicas Inatas */}
+      {/* ========== SEÇÃO DE TÉCNICAS COM SCROLL ========== */}
       <div>
-        <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-purple-500" />
+        <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-purple-500" />
           Escolha sua Técnica Inata
         </h3>
-        <p className="text-slate-400 mb-4">
+        <p className="mb-4" style={{ color: '#cbd5e1' }}>
           Sua técnica inata define seu estilo de combate e habilidades únicas.
         </p>
 
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <Input
-            placeholder="Buscar técnica..."
-            value={searchTecnica}
-            onChange={(e) => setSearchTecnica(e.target.value)}
-            className="pl-10 bg-slate-900 border-slate-700 text-white"
-          />
-        </div>
-
         {claData && (
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4">
-            <p className="text-sm text-slate-300">
-              <strong className="text-white">Clã {claData.nome}:</strong>{' '}
-              {claData.tecnicasHereditarias 
-                ? `Acesso a ${claData.tecnicasHereditarias.length} técnica(s) hereditária(s) + todas não-hereditárias`
-                : 'Apenas técnicas não-hereditárias disponíveis'
-              }
+          <div className="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+            <p className="text-sm" style={{ color: '#e2e8f0' }}>
+              <span className="font-semibold">Clã {claData.nome}:</span>{' '}
+              <span style={{ color: '#94a3b8' }}>
+                {claData.tecnicasHereditarias
+                  ? `Acesso a ${claData.tecnicasHereditarias.length} técnica(s) hereditária(s) + todas não-hereditárias`
+                  : 'Apenas técnicas não-hereditárias disponíveis'
+                }
+              </span>
             </p>
           </div>
         )}
 
-        <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-          {tecnicasDisponiveis.map((tecnica) => {
-            const isSelected = selectedTecnica === tecnica.id;
-            const isHereditaria = tecnica.tipo === 'hereditaria';
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder="Buscar técnica..."
+            value={searchTecnica}
+            onChange={(e) => setSearchTecnica(e.target.value)}
+            className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-400"
+          />
+        </div>
 
-            return (
-              <Card
-                key={tecnica.id}
-                onClick={() => handleTecnicaSelect(tecnica.id)}
-                className={`cursor-pointer transition-all p-4 ${
-                  isSelected
-                    ? 'bg-purple-900/30 border-purple-500 ring-2 ring-purple-500'
-                    : 'bg-slate-900 border-slate-700 hover:border-slate-600'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-base font-semibold text-white">
-                        {tecnica.nome}
-                      </h4>
-                      {isHereditaria && (
-                        <span 
-                          className="inline-block px-2 py-1 rounded-md text-xs font-medium text-center border"
-                          style={{ backgroundColor: '#581c87', color: '#d8b4fe', borderColor: '#7e22ce' }}
+        <div 
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          style={{
+            maxHeight: '500px',
+            overflowY: 'auto',
+            paddingRight: '8px'
+          }}
+        >
+          {tecnicasFiltradas.length > 0 ? (
+            tecnicasFiltradas.map((tecnica) => {
+              const isSelected = selectedTecnica === tecnica.id;
+
+              return (
+                <Card
+                  key={tecnica.id}
+                  onClick={() => handleTecnicaSelect(tecnica.id)}
+                  className={`cursor-pointer transition-all p-4 ${
+                    isSelected
+                      ? 'bg-purple-900/20'
+                      : 'bg-slate-800/50 border-slate-700 hover:border-purple-600'
+                  }`}
+                  style={isSelected ? {
+                    borderColor: '#ef4444',
+                    borderWidth: '2px',
+                    boxShadow: '0 0 0 2px rgba(239, 68, 68, 0.25)'
+                  } : {}}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-lg font-semibold text-white">{tecnica.nome}</h4>
+                      {tecnica.tipo === 'hereditaria' && (
+                        <span
+                          className="text-xs"
+                          style={{
+                            backgroundColor: '#7c3aed',
+                            color: '#e9d5ff',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontWeight: '500',
+                            display: 'inline-block'
+                          }}
                         >
                           Hereditária
                         </span>
                       )}
-                      {isSelected && <CheckCircle className="w-5 h-5 text-purple-500 ml-auto" />}
                     </div>
-                    <p className="text-sm text-slate-400">{tecnica.descricao}</p>
+                    {isSelected && <CheckCircle className="w-5 h-5" style={{ color: '#ef4444' }} />}
                   </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
 
-        {tecnicasDisponiveis.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-slate-400">Nenhuma técnica encontrada</p>
-          </div>
-        )}
+                  <p className="text-sm" style={{ color: '#cbd5e1' }}>
+                    {tecnica.descricao}
+                  </p>
+
+                  {tecnica.requisitos && (
+                    <p className="text-xs mt-2" style={{ color: '#94a3b8' }}>
+                      <span className="font-semibold">Requisito:</span> {tecnica.requisitos}
+                    </p>
+                  )}
+                </Card>
+              );
+            })
+          ) : (
+            <div className="col-span-2 text-center py-8">
+              <p style={{ color: '#94a3b8' }}>Nenhuma técnica encontrada</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

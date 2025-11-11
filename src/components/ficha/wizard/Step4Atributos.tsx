@@ -1,4 +1,4 @@
-// src/components/ficha/wizard/Step4Atributos.tsx - COMPLETO
+// src/components/ficha/wizard/Step4Atributos.tsx - CORRIGIDO COM CSS INLINE
 
 import { useState, useEffect } from 'react';
 import { Button } from '../../ui/button';
@@ -94,16 +94,16 @@ export function Step4Atributos({ data, updateData }: Step4AtributosProps) {
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-semibold text-white">Pontos de Atributo</h3>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm mt-1" style={{ color: '#cbd5e1' }}>
               Todos começam com 1. Distribua {pontosDisponiveis} pontos extras (0-7 por atributo).
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>
               Nível {data.nivel}: Base 4 pontos + {calcularPontosDisponiveis(data.nivel) - 4} bônus (níveis 4, 7, 10, 13, 16, 19)
             </p>
           </div>
           <div className="text-right">
             <div className="text-5xl font-bold text-red-500">{pontosRestantes}</div>
-            <div className="text-sm text-slate-400">restantes</div>
+            <div className="text-sm" style={{ color: '#cbd5e1' }}>restantes</div>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function Step4Atributos({ data, updateData }: Step4AtributosProps) {
                 <span className="text-4xl">{info.icon}</span>
                 <div className="flex-1">
                   <h4 className="text-xl font-semibold text-white">{info.nome}</h4>
-                  <p className="text-sm text-slate-400">{info.descricao}</p>
+                  <p className="text-sm" style={{ color: '#cbd5e1' }}>{info.descricao}</p>
                 </div>
               </div>
 
@@ -140,8 +140,8 @@ export function Step4Atributos({ data, updateData }: Step4AtributosProps) {
                   <div className={`text-6xl font-bold ${isZerado ? 'text-red-500' : 'text-white'}`}>
                     {valor}
                   </div>
-                  <div className="text-sm text-slate-500">
-                    {isZerado ? 'DESVANTAGEM' : 'máx. 7'}
+                  <div className="text-sm" style={{ color: isZerado ? '#fca5a5' : '#94a3b8' }}>
+                    {isZerado ? '⚠️ DESVANTAGEM' : 'máx. 7'}
                   </div>
                 </div>
 
@@ -172,7 +172,7 @@ export function Step4Atributos({ data, updateData }: Step4AtributosProps) {
                     style={{ width: `${porcentagem}%` }}
                   />
                 </div>
-                <div className="flex justify-between mt-1 text-xs text-slate-500">
+                <div className="flex justify-between mt-1 text-xs" style={{ color: '#94a3b8' }}>
                   <span>Desv. (0)</span>
                   <span>Máximo (7)</span>
                 </div>
@@ -183,8 +183,8 @@ export function Step4Atributos({ data, updateData }: Step4AtributosProps) {
       </div>
 
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-        <p className="text-sm text-slate-400">
-          <strong className="text-white">Sistema de dados:</strong> Você rola Xd20 nos testes, onde X = valor do atributo. 
+        <p className="text-sm" style={{ color: '#cbd5e1' }}>
+          <strong className="text-white">💡 Sistema de dados:</strong> Você rola Xd20 nos testes, onde X = valor do atributo. 
           Se X=0, rola 2d20 e fica com o pior (desvantagem). Se X≥1, fica com o melhor resultado.
         </p>
       </div>

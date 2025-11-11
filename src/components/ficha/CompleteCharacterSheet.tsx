@@ -1,4 +1,4 @@
-// src/components/ficha/CompleteCharacterSheet.tsx - CORRIGIDO
+// src/components/ficha/CompleteCharacterSheet.tsx - CORRIGIDO COM CSS INLINE
 
 import { Character } from '../../types/character';
 import { Card } from '../ui/card';
@@ -15,11 +15,11 @@ export function CompleteCharacterSheet({ data, onDelete, onEdit }: CompleteChara
   return (
     <Card className="bg-slate-900 border-slate-700 p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-3xl font-bold text-white">{data.nome}</h2>
+        <h2 className="text-3xl font-bold text-white">✨ {data.nome}</h2>
         <div className="flex gap-3">
           {onEdit && (
             <Button onClick={onEdit} variant="outline" className="flex items-center gap-1 border-slate-600 text-white hover:bg-slate-800">
-              Editar
+              ✏️ Editar
             </Button>
           )}
           <Button onClick={onDelete} variant="destructive" className="flex items-center gap-1">
@@ -29,21 +29,25 @@ export function CompleteCharacterSheet({ data, onDelete, onEdit }: CompleteChara
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-slate-300 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
         <div>
-          <strong>Nível:</strong> {data.nivel}
+          <strong className="text-white">Nível:</strong>{' '}
+          <span style={{ color: '#e2e8f0' }}>{data.nivel}</span>
         </div>
         <div>
-          <strong>Grau:</strong> {data.grauFeiticeiro}
+          <strong className="text-white">Grau:</strong>{' '}
+          <span style={{ color: '#e2e8f0' }}>{data.grauFeiticeiro}</span>
         </div>
         {data.idade && (
           <div>
-            <strong>Idade:</strong> {data.idade}
+            <strong className="text-white">Idade:</strong>{' '}
+            <span style={{ color: '#e2e8f0' }}>{data.idade}</span>
           </div>
         )}
         {data.jogador && (
           <div>
-            <strong>Jogador:</strong> {data.jogador}
+            <strong className="text-white">Jogador:</strong>{' '}
+            <span style={{ color: '#e2e8f0' }}>{data.jogador}</span>
           </div>
         )}
       </div>
@@ -56,8 +60,10 @@ export function CompleteCharacterSheet({ data, onDelete, onEdit }: CompleteChara
         <div className="flex gap-6 text-white text-lg">
           {Object.entries(data.atributos).map(([attr, val]) => (
             <div key={attr} className="text-center bg-slate-800 p-3 rounded-md min-w-[70px]">
-              <div className="uppercase text-sm text-slate-400">{attr.slice(0, 3)}</div>
-              <div>{val}</div>
+              <div className="uppercase text-sm" style={{ color: '#94a3b8' }}>
+                {attr.slice(0, 3)}
+              </div>
+              <div className="text-white">{val}</div>
             </div>
           ))}
         </div>
@@ -92,8 +98,8 @@ export function CompleteCharacterSheet({ data, onDelete, onEdit }: CompleteChara
 
       {data.descricao && (
         <div>
-          <h3 className="text-xl font-semibold text-white mb-2">Descrição</h3>
-          <p className="text-slate-300">{data.descricao}</p>
+          <h3 className="text-xl font-semibold text-white mb-2">📖 Descrição</h3>
+          <p style={{ color: '#e2e8f0' }}>{data.descricao}</p>
         </div>
       )}
     </Card>

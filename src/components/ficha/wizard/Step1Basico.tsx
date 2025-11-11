@@ -1,4 +1,4 @@
-// src/components/ficha/wizard/Step1Basico.tsx - COMPLETO
+// src/components/ficha/wizard/Step1Basico.tsx - CORRIGIDO COM CSS INLINE
 
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
@@ -68,7 +68,9 @@ export function Step1Basico({ data, updateData }: Step1BasicoProps) {
             className="bg-slate-900 border-slate-700 text-white mt-2"
             required
           />
-          <p className="text-xs text-slate-500 mt-1">Nível do personagem (1-20)</p>
+          <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>
+            Nível do personagem (1-20)
+          </p>
         </div>
 
         <div>
@@ -90,7 +92,9 @@ export function Step1Basico({ data, updateData }: Step1BasicoProps) {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-slate-500 mt-1">Determina missões disponíveis</p>
+          <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>
+            Determina missões disponíveis
+          </p>
         </div>
 
         <div>
@@ -121,8 +125,8 @@ export function Step1Basico({ data, updateData }: Step1BasicoProps) {
       </div>
 
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-        <p className="text-sm text-slate-400">
-          <strong className="text-white">Dica:</strong> O nível determina quantos pontos de atributo você tem. 
+        <p className="text-sm" style={{ color: '#cbd5e1' }}>
+          <strong className="text-white">💡 Dica:</strong> O nível determina quantos pontos de atributo você tem. 
           O grau de feiticeiro define seu reconhecimento na sociedade Jujutsu.
         </p>
       </div>

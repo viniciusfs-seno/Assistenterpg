@@ -187,3 +187,135 @@
 html {
   font-size: var(--font-size);
 }
+
+/* ========================================
+   FIX: Garantir visibilidade de texto no modo dark
+   ======================================== */
+@layer utilities {
+  /* Forçar classes Tailwind de cor a funcionarem */
+  .dark [class*="text-slate-100"] { color: #f1f5f9 !important; }
+  .dark [class*="text-slate-200"] { color: #e2e8f0 !important; }
+  .dark [class*="text-slate-300"] { color: #cbd5e1 !important; }
+  .dark [class*="text-slate-400"] { color: #94a3b8 !important; }
+  
+  .dark [class*="text-blue-100"] { color: #dbeafe !important; }
+  .dark [class*="text-blue-200"] { color: #bfdbfe !important; }
+  .dark [class*="text-blue-300"] { color: #93c5fd !important; }
+  .dark [class*="text-blue-400"] { color: #60a5fa !important; }
+  
+  .dark [class*="text-green-100"] { color: #dcfce7 !important; }
+  .dark [class*="text-green-200"] { color: #bbf7d0 !important; }
+  .dark [class*="text-green-300"] { color: #86efac !important; }
+  .dark [class*="text-green-400"] { color: #4ade80 !important; }
+  
+  .dark [class*="text-orange-300"] { color: #fdba74 !important; }
+  .dark [class*="text-orange-400"] { color: #fb923c !important; }
+  
+  .dark [class*="text-purple-300"] { color: #d8b4fe !important; }
+  .dark [class*="text-purple-400"] { color: #c084fc !important; }
+  
+  .dark [class*="text-red-300"] { color: #fca5a5 !important; }
+  .dark [class*="text-red-400"] { color: #f87171 !important; }
+  
+  .dark [class*="text-yellow-200"] { color: #fef08a !important; }
+  .dark [class*="text-yellow-300"] { color: #fde047 !important; }
+
+  .dark [class*="text-white"] { color: #ffffff !important; }
+}
+
+/* Garantir texto legível em parágrafos e spans sem cor específica */
+@layer components {
+  .dark p:not([class*="text-"]),
+  .dark span:not([class*="text-"]):not([class*="bg-"]),
+  .dark label:not([class*="text-"]) {
+    color: #e2e8f0;
+  }
+}
+
+/* ========================================
+   CLASSES UTILITÁRIAS PARA TEXTOS VISÍVEIS
+   Criado para resolver conflitos com shadcn/ui
+   Uso: Adicione estas classes aos elementos de texto
+   ======================================== */
+@layer components {
+  /* ============================================
+     TEXTOS SECUNDÁRIOS (cinza claro)
+     Uso: descrições, labels, subtítulos
+     Exemplo: <p className="text-visible-secondary">...</p>
+     ============================================ */
+  .text-visible-secondary {
+    color: #cbd5e1 !important; /* slate-300 */
+  }
+
+  /* ============================================
+     TEXTOS PRINCIPAIS (quase branco)
+     Uso: parágrafos principais, textos importantes
+     Exemplo: <p className="text-visible-primary">...</p>
+     ============================================ */
+  .text-visible-primary {
+    color: #e2e8f0 !important; /* slate-200 */
+  }
+
+  /* ============================================
+     TEXTO BRANCO PURO
+     Uso: títulos, textos de destaque máximo
+     Exemplo: <h1 className="text-visible-white">...</h1>
+     ============================================ */
+  .text-visible-white {
+    color: #f1f5f9 !important; /* slate-100 */
+  }
+
+  /* ============================================
+     TEXTO AZUL (destaques e links)
+     Uso: informações especiais, "Perícias livres"
+     Exemplo: <span className="text-visible-blue">+5 bônus</span>
+     ============================================ */
+  .text-visible-blue {
+    color: #93c5fd !important; /* blue-300 */
+  }
+
+  /* ============================================
+     TEXTO LARANJA (avisos e alertas)
+     Uso: requisitos, avisos importantes
+     Exemplo: <p className="text-visible-orange">Atenção!</p>
+     ============================================ */
+  .text-visible-orange {
+    color: #fdba74 !important; /* orange-300 */
+  }
+
+  /* ============================================
+     TEXTO VERDE (sucesso)
+     Uso: confirmações, sucesso
+     Exemplo: <span className="text-visible-green">Sucesso!</span>
+     ============================================ */
+  .text-visible-green {
+    color: #86efac !important; /* green-300 */
+  }
+
+  /* ============================================
+     TEXTO AMARELO (destaque especial)
+     Uso: bônus, recompensas
+     Exemplo: <span className="text-visible-yellow">+2 bônus</span>
+     ============================================ */
+  .text-visible-yellow {
+    color: #fde047 !important; /* yellow-300 */
+  }
+
+  /* ============================================
+     TEXTO ROXO (habilidades especiais)
+     Uso: poderes, habilidades únicas
+     Exemplo: <span className="text-visible-purple">Habilidade Especial</span>
+     ============================================ */
+  .text-visible-purple {
+    color: #d8b4fe !important; /* purple-300 */
+  }
+
+  /* ============================================
+     TEXTO VERMELHO (erro/perigo)
+     Uso: erros, avisos críticos
+     Exemplo: <p className="text-visible-red">Erro!</p>
+     ============================================ */
+  .text-visible-red {
+    color: #fca5a5 !important; /* red-300 */
+  }
+}

@@ -1,4 +1,4 @@
-// src/components/ficha/wizard/PericiaChoiceModal.tsx
+// src/components/ficha/wizard/PericiaChoiceModal.tsx - VERSÃO FINAL
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
@@ -18,7 +18,7 @@ export function PericiaChoiceModal({
   onClose,
   opcoes,
   onSelect,
-  titulo = 'Escolha uma Perícia'
+  titulo = '🎯 Escolha uma Perícia'
 }: PericiaChoiceModalProps) {
   const [selected, setSelected] = useState<string>('');
 
@@ -64,7 +64,7 @@ export function PericiaChoiceModal({
             disabled={!selected}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            Confirmar
+            ✓ Confirmar
           </Button>
         </DialogFooter>
       </DialogContent>

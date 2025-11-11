@@ -1,4 +1,4 @@
-// src/components/ficha/CharacterCreationWizard.tsx - COM SUPORTE A BÔNUS EXTRAS
+// src/components/ficha/CharacterCreationWizard.tsx - CORRIGIDO COM VALIDAÇÃO STEP5
 
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -7,7 +7,7 @@ import { Progress } from '../ui/progress';
 import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useCharacter } from '../../hooks/useCharacter';
 import { ClasseType, ClaType, Attributes, GrauFeiticeiro, GrauTreinamento } from '../../types/character';
-import { getClasseData } from '../../data/classes';
+import { getClasseData, calcularPericiasLivres } from '../../data/classes';
 import { ORIGENS } from '../../data/origens';
 import { supabase } from '../../utils/supabase/client';
 import { Step1Basico } from './wizard/Step1Basico';
@@ -30,7 +30,7 @@ export interface CharacterCreationData {
   tecnicaInataId: string;
   atributos: Attributes;
   periciasTreinadas: string[];
-  periciasBonusExtra?: { [pericia: string]: number }; // NOVO
+  periciasBonusExtra?: { [pericia: string]: number };
 }
 
 interface CharacterCreationWizardProps {
@@ -128,7 +128,43 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
         return totalPontos === esperado;
       
       case 5:
-        return data.periciasTreinadas.length > 0;
+        // VALIDAÇÃO COMPLETA: Verificar se escolheu todas as perícias livres
+        const classeDataStep5 = getClasseData(data.classe);
+        const periciasLivresTotal = calcularPericiasLivres(data.classe, data.atributos.intelecto);
+        const periciasGarantidas = data.periciasTreinadas || [];
+        
+        // Conta quantas perícias são garantidas (classe + origem)
+        const periciasGarantidasReais = new Set<string>();
+        
+        (classeDataStep5?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+        
+        const origemDataStep5 = ORIGENS.find(o => o.id === data.origemId);
+        (origemDataStep5?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+        
+        if (classeDataStep5?.periciasEscolha) {
+          classeDataStep5.periciasEscolha.forEach(escolha => {
+            escolha.opcoes.forEach(opcao => {
+              if (periciasGarantidas.includes(opcao)) {
+                periciasGarantidasReais.add(opcao);
+              }
+            });
+          });
+        }
+        
+        if (origemDataStep5?.periciasEscolha) {
+          origemDataStep5.periciasEscolha.opcoes.forEach(opcao => {
+            if (periciasGarantidas.includes(opcao)) {
+              periciasGarantidasReais.add(opcao);
+            }
+          });
+        }
+        
+        const periciasLivresEscolhidas = periciasGarantidas.filter(p => 
+          !periciasGarantidasReais.has(p)
+        );
+        
+        // Deve ter escolhido TODAS as perícias livres disponíveis
+        return periciasLivresEscolhidas.length === periciasLivresTotal;
       
       case 6:
         return true;
@@ -170,6 +206,45 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
         }
       }
     }
+
+    if (currentStep === 5) {
+      const classeData = getClasseData(data.classe);
+      const periciasLivresTotal = calcularPericiasLivres(data.classe, data.atributos.intelecto);
+      const periciasGarantidas = data.periciasTreinadas || [];
+      
+      const periciasGarantidasReais = new Set<string>();
+      (classeData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+      
+      const origemData = ORIGENS.find(o => o.id === data.origemId);
+      (origemData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+      
+      if (classeData?.periciasEscolha) {
+        classeData.periciasEscolha.forEach(escolha => {
+          escolha.opcoes.forEach(opcao => {
+            if (periciasGarantidas.includes(opcao)) {
+              periciasGarantidasReais.add(opcao);
+            }
+          });
+        });
+      }
+      
+      if (origemData?.periciasEscolha) {
+        origemData.periciasEscolha.opcoes.forEach(opcao => {
+          if (periciasGarantidas.includes(opcao)) {
+            periciasGarantidasReais.add(opcao);
+          }
+        });
+      }
+      
+      const periciasLivresEscolhidas = periciasGarantidas.filter(p => 
+        !periciasGarantidasReais.has(p)
+      );
+      
+      if (periciasLivresEscolhidas.length < periciasLivresTotal) {
+        return `Você precisa escolher todas as ${periciasLivresTotal} perícia(s) livre(s). Escolhidas: ${periciasLivresEscolhidas.length}/${periciasLivresTotal}`;
+      }
+    }
+
     return '';
   };
 
@@ -268,13 +343,13 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
     <Card className="bg-slate-900 border-slate-700 p-6 max-w-4xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
-          <CardTitle className="text-2xl text-white">Criar Personagem</CardTitle>
-          <span className="text-sm text-slate-400">
+          <CardTitle className="text-2xl text-white">✨ Criar Personagem</CardTitle>
+          <span className="text-sm" style={{ color: '#cbd5e1' }}>
             Passo {currentStep} de 6
           </span>
         </div>
         <Progress value={progress} className="h-2" />
-        <div className="flex justify-between mt-2 text-xs text-slate-500">
+        <div className="flex justify-between mt-2 text-xs" style={{ color: '#94a3b8' }}>
           {STEPS.map((step) => (
             <div
               key={step.id}
@@ -295,7 +370,7 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
         {validationError && (
           <div className="mt-4 p-4 bg-red-900/30 border border-red-500 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-red-300 text-sm">{validationError}</p>
+            <p className="text-sm" style={{ color: '#fca5a5' }}>{validationError}</p>
           </div>
         )}
 
@@ -303,7 +378,7 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
           <Button
             variant="outline"
             onClick={currentStep === 1 ? onCancel : handlePrevious}
-            className="border-slate-600 text-white hover:bg-slate-800"
+            className="bg-slate-600 border-slate-600 text-white hover:bg-slate-800"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             {currentStep === 1 ? 'Cancelar' : 'Voltar'}
@@ -324,7 +399,7 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
               disabled={!canProceed() || creating}
               className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
             >
-              {creating ? 'Criando...' : 'Criar Personagem'}
+              {creating ? '⏳ Criando...' : '✅ Criar Personagem'}
               <CheckCircle className="w-4 h-4 ml-2" />
             </Button>
           )}

@@ -14,13 +14,6 @@ export const TECNICAS_INATAS: TecnicaInataData[] = [
     descricao: 'Técnica que permite controlar o espaço em nível atômico, criando uma barreira infinita.',
   },
   {
-    id: '6_olhos',
-    nome: 'Seis Olhos',
-    tipo: 'hereditaria',
-    cla: 'gojo' as ClaType,
-    descricao: 'Olhos místicos que concedem percepção absoluta de energia amaldiçoada e controle perfeito.',
-  },
-  {
     id: 'dez_sombras',
     nome: 'Técnica das 10 Sombras',
     tipo: 'hereditaria',

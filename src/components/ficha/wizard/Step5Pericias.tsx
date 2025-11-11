@@ -1,4 +1,4 @@
-// src/components/ficha/wizard/Step5Pericias.tsx - CORRIGIDO
+// src/components/ficha/wizard/Step5Pericias.tsx - CORRIGIDO COMPLETO
 
 import { useState } from 'react';
 import { Card } from '../../ui/card';
@@ -18,22 +18,13 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
   const classeData = getClasseData(data.classe);
   const origemData = ORIGENS.find(o => o.id === data.origemId);
   
-  // Calcular quantidade de perícias livres baseado na classe e intelecto
   const periciasLivresTotal = calcularPericiasLivres(data.classe, data.atributos.intelecto);
-  
-  // Perícias já garantidas (classe + origem) - APENAS AS EFETIVAMENTE SELECIONADAS
   const periciasGarantidas = data.periciasTreinadas || [];
-  
-  // Separar perícias garantidas das livres
   const periciasGarantidasReais = new Set<string>();
   
-  // Adicionar perícias fixas da classe
   (classeData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
-  
-  // Adicionar perícias fixas da origem
   (origemData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
   
-  // Adicionar perícias escolhidas da classe (filtrar apenas as que estão em periciasTreinadas)
   if (classeData?.periciasEscolha) {
     classeData.periciasEscolha.forEach(escolha => {
       escolha.opcoes.forEach(opcao => {
@@ -44,7 +35,6 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
     });
   }
   
-  // Adicionar perícias escolhidas da origem (filtrar apenas as que estão em periciasTreinadas)
   if (origemData?.periciasEscolha) {
     origemData.periciasEscolha.opcoes.forEach(opcao => {
       if (periciasGarantidas.includes(opcao)) {
@@ -53,7 +43,6 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
     });
   }
   
-  // Contar quantas perícias livres já foram escolhidas
   const periciasLivresEscolhidas = periciasGarantidas.filter(p => 
     !periciasGarantidasReais.has(p)
   );
@@ -64,14 +53,12 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
     const index = periciasGarantidas.indexOf(nomePericias);
     
     if (index > -1) {
-      // Remover apenas se for perícia livre (não garantida)
       if (!periciasGarantidasReais.has(nomePericias)) {
         const novasPericias = [...periciasGarantidas];
         novasPericias.splice(index, 1);
         updateData({ periciasTreinadas: novasPericias });
       }
     } else {
-      // Adicionar se ainda tem espaço
       if (periciasLivresRestantes > 0) {
         updateData({ periciasTreinadas: [...periciasGarantidas, nomePericias] });
       }
@@ -85,26 +72,43 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-semibold text-white mb-2">Perícias Treinadas</h3>
-        <p className="text-slate-400 mb-4">
+        <h3 className="text-xl font-semibold text-white mb-2">📚 Perícias Treinadas</h3>
+        <p className="mb-4" style={{ color: '#cbd5e1' }}>
           Selecione as perícias nas quais seu personagem é treinado. Perícias treinadas ganham +5 nos testes.
         </p>
       </div>
 
-      {/* Informações sobre perícias garantidas - APENAS AS SELECIONADAS */}
-      <Card className="bg-blue-900/20 border-blue-700 p-4">
+      <Card 
+        className="p-4"
+        style={{
+          backgroundColor: 'rgba(30, 64, 175, 0.2)',
+          borderColor: '#3b82f6',
+          borderWidth: '1px'
+        }}
+      >
         <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+          <Info className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#60a5fa' }} />
           <div className="space-y-2">
-            <p className="text-sm text-blue-200 font-semibold">Perícias Garantidas</p>
+            <p className="text-sm font-semibold" style={{ color: '#bfdbfe' }}>
+              📋 Perícias Garantidas
+            </p>
             
-            {/* Perícias fixas da classe */}
             {classeData && classeData.periciasTreinadas.length > 0 && (
-              <div className="text-xs text-blue-300">
-                <span className="font-semibold">Classe ({classeData.nome}) - Fixas:</span>
+              <div className="text-xs">
+                <span className="font-semibold" style={{ color: '#93c5fd' }}>
+                  Classe ({classeData.nome}) - Fixas:
+                </span>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {classeData.periciasTreinadas.map(p => (
-                    <Badge key={p} variant="outline" className="bg-green-900 text-green-300 border-green-700">
+                    <Badge 
+                      key={p} 
+                      variant="outline" 
+                      style={{
+                        backgroundColor: '#14532d',
+                        color: '#86efac',
+                        borderColor: '#15803d'
+                      }}
+                    >
                       {p}
                     </Badge>
                   ))}
@@ -112,20 +116,28 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
               </div>
             )}
             
-            {/* Perícias ESCOLHIDAS da classe */}
             {classeData?.periciasEscolha && classeData.periciasEscolha.length > 0 && (
-              <div className="text-xs text-blue-300">
-                <span className="font-semibold">Classe ({classeData.nome}) - Escolhidas:</span>
+              <div className="text-xs">
+                <span className="font-semibold" style={{ color: '#93c5fd' }}>
+                  Classe ({classeData.nome}) - Escolhidas:
+                </span>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {periciasGarantidas
                     .filter(p => {
-                      // Verificar se a perícia está em alguma das opções de escolha E foi selecionada
                       return classeData.periciasEscolha!.some(escolha => 
                         escolha.opcoes.includes(p)
-                      ) && !classeData.periciasTreinadas.includes(p); // Não duplicar as fixas
+                      ) && !classeData.periciasTreinadas.includes(p);
                     })
                     .map(p => (
-                      <Badge key={p} variant="outline" className="bg-blue-900 text-blue-300 border-blue-700">
+                      <Badge 
+                        key={p} 
+                        variant="outline" 
+                        style={{
+                          backgroundColor: '#1e3a8a',
+                          color: '#93c5fd',
+                          borderColor: '#1d4ed8'
+                        }}
+                      >
                         {p}
                       </Badge>
                     ))
@@ -134,13 +146,22 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
               </div>
             )}
             
-            {/* Perícias fixas da origem */}
             {origemData && origemData.periciasTreinadas.length > 0 && (
-              <div className="text-xs text-blue-300">
-                <span className="font-semibold">Origem ({origemData.nome}) - Fixas:</span>
+              <div className="text-xs">
+                <span className="font-semibold" style={{ color: '#93c5fd' }}>
+                  Origem ({origemData.nome}) - Fixas:
+                </span>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {origemData.periciasTreinadas.map(p => (
-                    <Badge key={p} variant="outline" className="bg-green-900 text-green-300 border-green-700">
+                    <Badge 
+                      key={p} 
+                      variant="outline" 
+                      style={{
+                        backgroundColor: '#14532d',
+                        color: '#86efac',
+                        borderColor: '#15803d'
+                      }}
+                    >
                       {p}
                     </Badge>
                   ))}
@@ -148,19 +169,27 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
               </div>
             )}
 
-            {/* Perícias ESCOLHIDAS da origem */}
             {origemData?.periciasEscolha && (
-              <div className="text-xs text-blue-300">
-                <span className="font-semibold">Origem ({origemData.nome}) - Escolhidas:</span>
+              <div className="text-xs">
+                <span className="font-semibold" style={{ color: '#93c5fd' }}>
+                  Origem ({origemData.nome}) - Escolhidas:
+                </span>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {periciasGarantidas
                     .filter(p => {
-                      // Verificar se a perícia está nas opções de origem E foi selecionada
                       return origemData.periciasEscolha!.opcoes.includes(p) && 
-                             !origemData.periciasTreinadas.includes(p); // Não duplicar as fixas
+                             !origemData.periciasTreinadas.includes(p);
                     })
                     .map(p => (
-                      <Badge key={p} variant="outline" className="bg-blue-900 text-blue-300 border-blue-700">
+                      <Badge 
+                        key={p} 
+                        variant="outline" 
+                        style={{
+                          backgroundColor: '#1e3a8a',
+                          color: '#93c5fd',
+                          borderColor: '#1d4ed8'
+                        }}
+                      >
                         {p}
                       </Badge>
                     ))
@@ -169,41 +198,58 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
               </div>
             )}
             
-            <p className="text-xs text-slate-400 italic mt-2">
+            <p className="text-xs italic mt-2" style={{ color: '#cbd5e1' }}>
               Essas perícias foram selecionadas na sua classe e origem e não podem ser removidas.
             </p>
           </div>
         </div>
       </Card>
 
-      {/* Contador de perícias livres */}
-      <Card className="bg-purple-900/20 border-purple-700 p-4">
+      <Card 
+        className="p-4"
+        style={{
+          backgroundColor: 'rgba(88, 28, 135, 0.2)',
+          borderColor: '#a855f7',
+          borderWidth: '1px'
+        }}
+      >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-purple-300">Perícias Livres</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm font-semibold" style={{ color: '#d8b4fe' }}>
+              🎯 Perícias Livres
+            </p>
+            <p className="text-xs" style={{ color: '#e2e8f0' }}>
               {classeData?.periciasLivres.base} (base da classe) + {data.atributos.intelecto} (Intelecto) = {periciasLivresTotal} perícia(s) livre(s)
             </p>
           </div>
           <div className="text-right">
-            <p className={`text-2xl font-bold ${periciasLivresRestantes === 0 ? 'text-green-500' : 'text-yellow-500'}`}>
+            <p 
+              className="text-2xl font-bold"
+              style={{ color: periciasLivresRestantes === 0 ? '#22c55e' : '#eab308' }}
+            >
               {periciasLivresEscolhidas.length} / {periciasLivresTotal}
             </p>
-            <p className="text-xs text-slate-400">Escolhidas</p>
+            <p className="text-xs" style={{ color: '#e2e8f0' }}>Escolhidas</p>
           </div>
         </div>
       </Card>
 
-      {/* Aviso se ainda faltam perícias */}
       {periciasLivresRestantes > 0 && (
-        <Card className="bg-yellow-900/20 border-yellow-700 p-4">
+        <Card 
+          className="p-4"
+          style={{
+            backgroundColor: 'rgba(113, 63, 18, 0.2)',
+            borderColor: '#ca8a04',
+            borderWidth: '1px'
+          }}
+        >
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#facc15' }} />
             <div>
-              <p className="text-sm text-yellow-200 font-semibold">
-                Você ainda pode escolher {periciasLivresRestantes} perícia(s)!
+              <p className="text-sm font-semibold" style={{ color: '#fef08a' }}>
+                ⚠️ Você ainda pode escolher {periciasLivresRestantes} perícia(s)!
               </p>
-              <p className="text-xs text-yellow-300 mt-1">
+              <p className="text-xs mt-1" style={{ color: '#fde047' }}>
                 Clique nas perícias abaixo para adicioná-las à sua ficha.
               </p>
             </div>
@@ -211,7 +257,6 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
         </Card>
       )}
 
-      {/* Lista de todas as perícias */}
       <div>
         <h4 className="text-lg font-semibold text-white mb-3">Todas as Perícias</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -227,38 +272,90 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
                 onClick={() => togglePericia(pericia.nome)}
                 className={`p-3 transition-all ${
                   isSelected && isGarantida
-                    ? 'bg-green-900/30 border-green-600 cursor-not-allowed'
+                    ? 'cursor-not-allowed'
                     : isSelected
-                    ? 'bg-purple-900/30 border-purple-500 hover:bg-purple-900/40 cursor-pointer'
+                    ? 'cursor-pointer'
                     : canSelect
-                    ? 'bg-slate-800 border-slate-700 hover:border-slate-600 cursor-pointer'
-                    : 'bg-slate-800 border-slate-700 opacity-50 cursor-not-allowed'
+                    ? 'cursor-pointer'
+                    : 'opacity-50 cursor-not-allowed'
                 }`}
+                style={
+                  isSelected && isGarantida
+                    ? {
+                        backgroundColor: 'rgba(20, 83, 45, 0.3)',
+                        borderColor: '#16a34a',
+                        borderWidth: '1px'
+                      }
+                    : isSelected
+                    ? {
+                        backgroundColor: 'rgba(88, 28, 135, 0.3)',
+                        borderColor: '#a855f7',
+                        borderWidth: '1px'
+                      }
+                    : canSelect
+                    ? {
+                        backgroundColor: '#1e293b',
+                        borderColor: '#334155',
+                        borderWidth: '1px'
+                      }
+                    : {
+                        backgroundColor: '#1e293b',
+                        borderColor: '#334155',
+                        borderWidth: '1px'
+                      }
+                }
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="font-semibold text-white">{pericia.nome}</p>
                       {isSelected && (
-                        <CheckCircle className={`w-4 h-4 ${isGarantida ? 'text-green-500' : 'text-purple-500'}`} />
+                        <CheckCircle 
+                          className="w-4 h-4" 
+                          style={{ color: isGarantida ? '#22c55e' : '#a855f7' }} 
+                        />
                       )}
                       {isGarantida && (
-                        <Badge variant="outline" className="text-xs bg-green-900 text-green-300 border-green-700">
-                          Garantida
+                        <Badge 
+                          variant="outline" 
+                          className="text-xs"
+                          style={{
+                            backgroundColor: '#14532d',
+                            color: '#86efac',
+                            borderColor: '#15803d'
+                          }}
+                        >
+                          ✓ Garantida
                         </Badge>
                       )}
                       {canRemove && (
-                        <Badge variant="outline" className="text-xs bg-purple-900 text-purple-300 border-purple-700">
-                          Livre
+                        <Badge 
+                          variant="outline" 
+                          className="text-xs"
+                          style={{
+                            backgroundColor: '#581c87',
+                            color: '#d8b4fe',
+                            borderColor: '#7e22ce'
+                          }}
+                        >
+                          ★ Livre
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs" style={{ color: '#cbd5e1' }}>
                       <span className="font-semibold">Base:</span> {pericia.atributoBase.slice(0, 3).toUpperCase()}
                     </p>
                     {pericia.somenteComTreinamento && (
-                      <Badge variant="outline" className="text-xs mt-1 bg-orange-900 text-orange-300 border-orange-700">
-                        Só Treinada
+                      <Badge 
+                        variant="outline" 
+                        className="text-xs mt-1"
+                        style={{
+                          backgroundColor: '#7c2d12',
+                          color: '#fdba74',
+                          borderColor: '#c2410c'
+                        }}
+                      >
+                        🔒 Só Treinada
                       </Badge>
                     )}
                   </div>
@@ -269,10 +366,16 @@ export function Step5Pericias({ data, updateData }: Step5PericiasProps) {
         </div>
       </div>
 
-      {/* Dica final */}
-      <Card className="bg-slate-800 border-slate-700 p-4">
-        <p className="text-sm text-slate-300">
-          <span className="font-semibold text-blue-400">💡 Dica:</span> Perícias com badge "Garantida" (verde) vêm da sua classe/origem e não podem ser removidas.
+      <Card 
+        className="p-4"
+        style={{
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: '1px'
+        }}
+      >
+        <p className="text-sm" style={{ color: '#e2e8f0' }}>
+          <span className="font-semibold" style={{ color: '#60a5fa' }}>💡 Dica:</span> Perícias com badge "Garantida" (verde) vêm da sua classe/origem e não podem ser removidas.
           Perícias com badge "Livre" (roxo) podem ser adicionadas ou removidas livremente até o limite de perícias livres disponíveis.
         </p>
       </Card>
