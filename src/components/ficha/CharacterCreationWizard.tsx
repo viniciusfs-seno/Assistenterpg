@@ -1,27 +1,37 @@
-// src/components/ficha/CharacterCreationWizard.tsx - CORRIGIDO COM VALIDAÇÃO STEP5
+// src/components/ficha/CharacterCreationWizard.tsx - CORRIGIDO COM TÉCNICAS
 
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useCharacter } from '../../hooks/useCharacter';
-import { ClasseType, ClaType, Attributes, GrauFeiticeiro, GrauTreinamento } from '../../types/character';
+import { ClasseType, ClaType, Attributes, GrauTreinamento, TrilhaType, CategoriaTecnica, GrauFeiticeiro, ProficienciaType } from '../../types/character';
 import { getClasseData, calcularPericiasLivres } from '../../data/classes';
 import { ORIGENS } from '../../data/origens';
 import { supabase } from '../../utils/supabase/client';
 import { Step1Basico } from './wizard/Step1Basico';
 import { Step2ClasseOrigem } from './wizard/Step2ClasseOrigem';
 import { Step3ClaTecnica } from './wizard/Step3ClaTecnica';
+import { Step3_5Trilha } from './wizard/Step3_5Trilha';
 import { Step4Atributos } from './wizard/Step4Atributos';
 import { Step5Pericias } from './wizard/Step5Pericias';
+import { Step7Poderes } from './wizard/Step7Poderes';
 import { Step6Revisao } from './wizard/Step6Revisao';
+import { Step8Tecnicas } from './wizard/Step8Tecnicas';
+import { gerarMapaPericiaGrados } from '../../types/character';
+import { calcularBeneficiosPrestigio } from '../../utils/prestigio';
+import { calcularQuantidadePoderesDisponiveis } from '../../utils/poderValidator';
+import { calcularBonusPoderes } from '../../utils/poderEffects';
+import { calcularBonusTecnicas } from '../../utils/tecnicaValidator'; // ✅ IMPORTAÇÃO
 
 export interface CharacterCreationData {
+  grauFeiticeiro: GrauFeiticeiro;
   nome: string;
   idade?: number;
   nivel: number;
-  grauFeiticeiro: GrauFeiticeiro;
+  pontosPrestígio: number;
+  prestigioCla?: number;
   jogador?: string;
   descricao?: string;
   classe: ClasseType;
@@ -29,8 +39,15 @@ export interface CharacterCreationData {
   cla: ClaType;
   tecnicaInataId: string;
   atributos: Attributes;
+  atributoEA: 'intelecto' | 'presenca';
+  estudouEscolaTecnica?: boolean;
   periciasTreinadas: string[];
   periciasBonusExtra?: { [pericia: string]: number };
+  periciaGrados?: { [nome: string]: GrauTreinamento };
+  trilha?: TrilhaType;
+  subcaminhoMestreBarreiras?: 'dominio_perfeito' | 'anulador_barreiras' | 'apoio_campo';
+  poderesIds: string[];
+  tecnicasBasicas: { [categoria in CategoriaTecnica]: number };
 }
 
 interface CharacterCreationWizardProps {
@@ -42,9 +59,12 @@ const STEPS = [
   { id: 1, title: 'Básico', description: 'Informações principais' },
   { id: 2, title: 'Classe & Origem', description: 'Escolha sua base' },
   { id: 3, title: 'Clã & Técnica', description: 'Sua linhagem' },
-  { id: 4, title: 'Atributos', description: 'Distribua pontos' },
-  { id: 5, title: 'Perícias', description: 'Especializações' },
-  { id: 6, title: 'Revisão', description: 'Confira tudo' },
+  { id: 4, title: 'Trilha', description: 'Especialização' },
+  { id: 5, title: 'Atributos', description: 'Distribua pontos' },
+  { id: 6, title: 'Perícias', description: 'Especializações' },
+  { id: 7, title: 'Poderes', description: 'Habilidades especiais' },
+  { id: 8, title: 'Técnicas Básicas', description: 'Aprimore suas técnicas' },
+  { id: 9, title: 'Revisão', description: 'Confira tudo' },
 ];
 
 export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreationWizardProps) {
@@ -55,11 +75,13 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
   const [data, setData] = useState<CharacterCreationData>({
     nome: '',
     nivel: 1,
-    grauFeiticeiro: 'grau_4' as GrauFeiticeiro,
+    pontosPrestígio: 0,
+    prestigioCla: 0,
     classe: 'combatente' as ClasseType,
     origemId: 'academico',
     cla: 'sem_cla' as ClaType,
     tecnicaInataId: '',
+    grauFeiticeiro: 'grau_4' as GrauFeiticeiro,
     atributos: {
       agilidade: 1,
       forca: 1,
@@ -67,51 +89,89 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
       presenca: 1,
       vigor: 1,
     },
+    atributoEA: 'intelecto',
+    estudouEscolaTecnica: false,
     periciasTreinadas: [],
     periciasBonusExtra: {},
+    periciaGrados: {},
+    poderesIds: [],
+    tecnicasBasicas: {
+      tecnica_amaldicoada: 0,
+      barreira: 0,
+      reversa: 0,
+      anti_barreira: 0,
+      shikigami: 0,
+      tecnicas_secretas: 0,
+    }
   });
 
   const updateData = (updates: Partial<CharacterCreationData>) => {
     setData((prev) => ({ ...prev, ...updates }));
   };
 
+  const calcularPontosAprimoramentoDisponiveis = (nivel: number) => {
+    const niveisComPonto = [2, 8, 14, 18];
+    return niveisComPonto.filter(n => nivel >= n).length;
+  };
+
+  // ✅ NOVA FUNÇÃO: Calcular pontos GASTOS (sem bônus)
+  const calcularPontosGastosTecnicas = (): number => {
+    const bonus = calcularBonusTecnicas(
+      data.nivel,
+      data.estudouEscolaTecnica || false,
+      data.trilha as any,
+      data.subcaminhoMestreBarreiras,
+      data.cla as any
+    );
+
+    return Object.entries(data.tecnicasBasicas || {}).reduce((acc, [categoria, grau]) => {
+      const bonusNaCategoria = bonus
+        .filter(b => b.categoria === categoria as CategoriaTecnica)
+        .reduce((sum, b) => sum + b.graus, 0);
+      
+      const pontosGastos = Math.max(0, grau - bonusNaCategoria);
+      return acc + pontosGastos;
+    }, 0);
+  };
+
   const canProceed = (): boolean => {
     switch (currentStep) {
       case 1:
         return data.nome.trim().length > 0;
-      
       case 2:
         if (!data.classe || !data.origemId) return false;
-        
+
         const classeData = getClasseData(data.classe);
         if (classeData?.periciasEscolha) {
           const periciasClasse = classeData.periciasTreinadas;
           const escolhasNecessarias = classeData.periciasEscolha.length;
-          const periciasEscolhidasClasse = data.periciasTreinadas.filter(p => 
-            !periciasClasse.includes(p) && 
+          const periciasEscolhidasClasse = data.periciasTreinadas.filter(p =>
+            !periciasClasse.includes(p) &&
             classeData.periciasEscolha!.some(e => e.opcoes.includes(p))
           );
-          
+
           if (periciasEscolhidasClasse.length < escolhasNecessarias) {
             return false;
           }
         }
-        
+
         const origem = ORIGENS.find(o => o.id === data.origemId);
         if (origem?.periciasEscolha) {
-          const periciasBase = origem.periciasTreinadas.length;
+          const perciasBase = origem.periciasTreinadas.length;
           const classePericiasTotal = (classeData?.periciasTreinadas.length || 0) + (classeData?.periciasEscolha?.length || 0);
-          const periciasEsperadas = periciasBase + classePericiasTotal + origem.periciasEscolha.quantidade;
-          
+          const periciasEsperadas = perciasBase + classePericiasTotal + origem.periciasEscolha.quantidade;
+
           return data.periciasTreinadas.length >= periciasEsperadas;
         }
-        
         return true;
-      
       case 3:
         return !!(data.cla && data.tecnicaInataId);
-      
       case 4:
+        if (data.nivel < 2) return true;
+        if (!data.trilha) return false;
+        if (data.trilha === 'mestre_barreiras' && !data.subcaminhoMestreBarreiras) return false;
+        return true;
+      case 5:
         const totalPontos = Object.values(data.atributos).reduce((a, b) => a + b, 0);
         const basePontos = 5;
         const calcularPontosDisponiveis = (nivel: number) => {
@@ -126,23 +186,20 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
         };
         const esperado = basePontos + calcularPontosDisponiveis(data.nivel);
         return totalPontos === esperado;
-      
-      case 5:
-        // VALIDAÇÃO COMPLETA: Verificar se escolheu todas as perícias livres
-        const classeDataStep5 = getClasseData(data.classe);
+      case 6: {
+        const classeDataStep6 = getClasseData(data.classe);
         const periciasLivresTotal = calcularPericiasLivres(data.classe, data.atributos.intelecto);
-        const periciasGarantidas = data.periciasTreinadas || [];
-        
-        // Conta quantas perícias são garantidas (classe + origem)
+        const periciasGarantidas = data.periciasTreinadas;
+
         const periciasGarantidasReais = new Set<string>();
-        
-        (classeDataStep5?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
-        
-        const origemDataStep5 = ORIGENS.find(o => o.id === data.origemId);
-        (origemDataStep5?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
-        
-        if (classeDataStep5?.periciasEscolha) {
-          classeDataStep5.periciasEscolha.forEach(escolha => {
+
+        (classeDataStep6?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+
+        const origemDataStep6 = ORIGENS.find(o => o.id === data.origemId);
+        (origemDataStep6?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
+
+        if (classeDataStep6?.periciasEscolha) {
+          classeDataStep6.periciasEscolha.forEach(escolha => {
             escolha.opcoes.forEach(opcao => {
               if (periciasGarantidas.includes(opcao)) {
                 periciasGarantidasReais.add(opcao);
@@ -150,25 +207,34 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
             });
           });
         }
-        
-        if (origemDataStep5?.periciasEscolha) {
-          origemDataStep5.periciasEscolha.opcoes.forEach(opcao => {
+
+        if (origemDataStep6?.periciasEscolha) {
+          origemDataStep6.periciasEscolha.opcoes.forEach(opcao => {
             if (periciasGarantidas.includes(opcao)) {
               periciasGarantidasReais.add(opcao);
             }
           });
         }
-        
-        const periciasLivresEscolhidas = periciasGarantidas.filter(p => 
-          !periciasGarantidasReais.has(p)
-        );
-        
-        // Deve ter escolhido TODAS as perícias livres disponíveis
+
+        if (data.estudouEscolaTecnica === true) {
+          periciasGarantidasReais.add('Jujutsu');
+        }
+
+        const periciasLivresEscolhidas = periciasGarantidas.filter(p => !periciasGarantidasReais.has(p));
+
         return periciasLivresEscolhidas.length === periciasLivresTotal;
-      
-      case 6:
+      }
+
+      case 7:
+        const quantidadePoderes = calcularQuantidadePoderesDisponiveis(data.nivel);
+        return data.poderesIds.length === quantidadePoderes;
+      case 8:
+        // ✅ CORRIGIDO: Valida apenas pontos GASTOS (sem bônus)
+        const pontosDisponiveis = calcularPontosAprimoramentoDisponiveis(data.nivel);
+        const pontosGastos = calcularPontosGastosTecnicas();
+        return pontosGastos <= pontosDisponiveis;
+      case 9:
         return true;
-      
       default:
         return true;
     }
@@ -178,46 +244,56 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
     if (currentStep === 2) {
       if (!data.classe) return 'Selecione uma classe';
       if (!data.origemId) return 'Selecione uma origem';
-      
+
       const classeData = getClasseData(data.classe);
       const origem = ORIGENS.find(o => o.id === data.origemId);
-      
+
       if (classeData?.periciasEscolha) {
         const periciasClasse = classeData.periciasTreinadas;
         const escolhasNecessarias = classeData.periciasEscolha.length;
-        const periciasEscolhidasClasse = data.periciasTreinadas.filter(p => 
-          !periciasClasse.includes(p) && 
+        const periciasEscolhidasClasse = data.periciasTreinadas.filter(p =>
+          !periciasClasse.includes(p) &&
           classeData.periciasEscolha!.some(e => e.opcoes.includes(p))
         );
-        
+
         if (periciasEscolhidasClasse.length < escolhasNecessarias) {
           return `Você precisa escolher ${escolhasNecessarias} perícia(s) da classe. Escolhidas: ${periciasEscolhidasClasse.length}/${escolhasNecessarias}`;
         }
       }
-      
+
       if (origem?.periciasEscolha) {
-        const periciasBase = origem.periciasTreinadas.length;
+        const perciasBase = origem.periciasTreinadas.length;
         const classePericiasTotal = (classeData?.periciasTreinadas.length || 0) + (classeData?.periciasEscolha?.length || 0);
-        const periciasEsperadas = periciasBase + classePericiasTotal + origem.periciasEscolha.quantidade;
-        const periciasOrigemEscolhidas = data.periciasTreinadas.length - periciasBase - classePericiasTotal;
-        
+        const periciasEsperadas = perciasBase + classePericiasTotal + origem.periciasEscolha.quantidade;
+        const periciasOrigemEscolhidas = data.periciasTreinadas.length - perciasBase - classePericiasTotal;
+
         if (data.periciasTreinadas.length < periciasEsperadas) {
           return `Você precisa escolher ${origem.periciasEscolha.quantidade} perícia(s) da origem. Escolhidas: ${periciasOrigemEscolhidas}/${origem.periciasEscolha.quantidade}`;
         }
       }
     }
 
-    if (currentStep === 5) {
+    if (currentStep === 4) {
+      if (data.nivel >= 2 && !data.trilha) {
+        return 'Escolha uma trilha para personagens de nível 2 ou superior';
+      }
+      if (data.trilha === 'mestre_barreiras' && !data.subcaminhoMestreBarreiras) {
+        return 'Escolha um subcaminho para a trilha Mestre de Barreiras';
+      }
+    }
+
+    if (currentStep === 6) {
       const classeData = getClasseData(data.classe);
       const periciasLivresTotal = calcularPericiasLivres(data.classe, data.atributos.intelecto);
-      const periciasGarantidas = data.periciasTreinadas || [];
-      
+      const periciasGarantidas = data.periciasTreinadas;
+
       const periciasGarantidasReais = new Set<string>();
+
       (classeData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
-      
+
       const origemData = ORIGENS.find(o => o.id === data.origemId);
       (origemData?.periciasTreinadas || []).forEach(p => periciasGarantidasReais.add(p));
-      
+
       if (classeData?.periciasEscolha) {
         classeData.periciasEscolha.forEach(escolha => {
           escolha.opcoes.forEach(opcao => {
@@ -227,7 +303,7 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
           });
         });
       }
-      
+
       if (origemData?.periciasEscolha) {
         origemData.periciasEscolha.opcoes.forEach(opcao => {
           if (periciasGarantidas.includes(opcao)) {
@@ -235,13 +311,31 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
           }
         });
       }
-      
-      const periciasLivresEscolhidas = periciasGarantidas.filter(p => 
-        !periciasGarantidasReais.has(p)
-      );
-      
+
+      if (data.estudouEscolaTecnica === true) {
+        periciasGarantidasReais.add('Jujutsu');
+      }
+
+      const periciasLivresEscolhidas = periciasGarantidas.filter(p => !periciasGarantidasReais.has(p));
+
       if (periciasLivresEscolhidas.length < periciasLivresTotal) {
         return `Você precisa escolher todas as ${periciasLivresTotal} perícia(s) livre(s). Escolhidas: ${periciasLivresEscolhidas.length}/${periciasLivresTotal}`;
+      }
+    }
+
+    if (currentStep === 7) {
+      const quantidadePoderes = calcularQuantidadePoderesDisponiveis(data.nivel);
+      if (data.poderesIds.length < quantidadePoderes) {
+        return `Você precisa escolher ${quantidadePoderes} poder(es). Escolhidos: ${data.poderesIds.length}/${quantidadePoderes}`;
+      }
+    }
+
+    if (currentStep === 8) {
+      // ✅ CORRIGIDO: Valida apenas pontos GASTOS (sem bônus)
+      const pontosDisponiveis = calcularPontosAprimoramentoDisponiveis(data.nivel);
+      const pontosGastos = calcularPontosGastosTecnicas();
+      if (pontosGastos > pontosDisponiveis) {
+        return `Você está usando mais pontos de aprimoramento (${pontosGastos}) do que o permitido para seu nível (${pontosDisponiveis}).`;
       }
     }
 
@@ -249,7 +343,7 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
   };
 
   const handleNext = () => {
-    if (canProceed() && currentStep < 6) {
+    if (canProceed() && currentStep < 9) {
       setCurrentStep((prev) => prev + 1);
     }
   };
@@ -264,54 +358,126 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
     if (!canProceed()) return;
 
     setCreating(true);
+
     try {
-      // 1. Criar personagem
+      console.log('🚀 Iniciando criação do personagem...', { nome: data.nome });
+
+      const periciaGrados = gerarMapaPericiaGrados(data.periciasTreinadas);
+      const beneficiosPrestigio = calcularBeneficiosPrestigio(data.pontosPrestígio || 0);
+      const subcaminhoFinal = data.trilha === 'mestre_barreiras' ? data.subcaminhoMestreBarreiras : undefined;
+
+      const bonusPoderes = calcularBonusPoderes(data.poderesIds, data.nivel);
+      console.log('🛡️ [PROFICIÊNCIAS DETECTADAS]', bonusPoderes.proficienciasGanhas);
+
       const characterId = await createCharacter({
         nome: data.nome,
         idade: data.idade,
         nivel: data.nivel,
-        grauFeiticeiro: data.grauFeiticeiro,
+        grauFeiticeiro: beneficiosPrestigio.grauFeiticeiro,
         jogador: data.jogador,
         descricao: data.descricao,
         classe: data.classe,
-        trilha: null,
+        trilha: data.trilha || null,
+        subcaminhoMestreBarreiras: subcaminhoFinal || null,
         origemId: data.origemId,
         cla: data.cla,
         tecnicaInataId: data.tecnicaInataId,
         atributos: data.atributos,
-        pontosPrestígio: 0,
-        prestigioCla: 0,
+        atributoEA: data.atributoEA,
+        estudouEscolaTecnica: data.estudouEscolaTecnica || false,
+        pontosPrestígio: data.pontosPrestígio || 0,
+        prestigioCla: data.prestigioCla || 0,
         avatarUrl: null,
         alinhamento: null,
+        periciaGrados,
+        periciasBonusExtra: data.periciasBonusExtra || {},
+        poderesIds: data.poderesIds || [],
+        proficiencias: bonusPoderes.proficienciasGanhas,
+        tecnicasBasicas: data.tecnicasBasicas || {
+          tecnica_amaldicoada: 0,
+          barreira: 0,
+          reversa: 0,
+          anti_barreira: 0,
+          shikigami: 0,
+          tecnicas_secretas: 0,
+        }
       });
 
-      // 2. Salvar perícias COM bônus extras
-      const periciasParaSalvar = data.periciasTreinadas.map(periciaNome => {
-        const bonusExtra = data.periciasBonusExtra?.[periciaNome] || 0;
-        
-        return {
-          character_id: characterId,
-          skill_name: periciaNome,
-          grau_treinamento: GrauTreinamento.TREINADO,
-          outros: bonusExtra, // SALVANDO O BÔNUS EXTRA AQUI
-        };
-      });
+      console.log('✅ Personagem criado:', { characterId });
 
-      if (periciasParaSalvar.length > 0) {
+      if (data.periciasTreinadas.length > 0) {
+        const periciasParaSalvar = data.periciasTreinadas.map(periciaNome => {
+          const bonusExtra = data.periciasBonusExtra?.[periciaNome] || 0;
+          return {
+            character_id: characterId,
+            skill_name: periciaNome,
+            grau_treinamento: GrauTreinamento.TREINADO,
+            outros: bonusExtra,
+          };
+        });
+
+        console.log('💾 Salvando perícias...', { count: periciasParaSalvar.length });
+
         const { error: skillsError } = await supabase
           .from('character_skills')
           .insert(periciasParaSalvar);
 
         if (skillsError) {
-          console.error('Erro ao salvar perícias:', skillsError);
-          throw skillsError;
+          console.error('❌ Erro ao salvar perícias:', skillsError);
+          throw new Error('Erro ao salvar perícias: ' + skillsError.message);
         }
+
+        console.log('✅ Perícias salvas com sucesso');
       }
 
+      if (data.poderesIds.length > 0) {
+        const poderesParaSalvar = data.poderesIds.map(poderId => ({
+          character_id: characterId,
+          power_id: poderId,
+          nivel_obtido: data.nivel,
+        }));
+
+        console.log('💾 Salvando poderes...', { count: poderesParaSalvar.length });
+
+        const { error: powersError } = await supabase
+          .from('character_powers')
+          .insert(poderesParaSalvar);
+
+        if (powersError) {
+          console.error('❌ Erro ao salvar poderes:', powersError);
+          throw new Error('Erro ao salvar poderes: ' + powersError.message);
+        }
+
+        console.log('✅ Poderes salvos com sucesso');
+      }
+
+      if (bonusPoderes.proficienciasGanhas.length > 0) {
+        const proficienciasParaSalvar = bonusPoderes.proficienciasGanhas.map(prof => ({
+          character_id: characterId,
+          proficiency_type: prof,
+        }));
+
+        console.log('💾 Salvando proficiências...', { count: proficienciasParaSalvar.length });
+
+        const { error: profError } = await supabase
+          .from('character_proficiencies')
+          .insert(proficienciasParaSalvar);
+
+        if (profError) {
+          console.error('❌ Erro ao salvar proficiências:', profError);
+          throw new Error('Erro ao salvar proficiências: ' + profError.message);
+        }
+
+        console.log('✅ Proficiências salvas com sucesso');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       onComplete(characterId);
-    } catch (error) {
-      console.error('Erro ao criar personagem:', error);
-      alert('Erro ao criar personagem. Tente novamente.');
+    } catch (error: any) {
+      console.error('❌ Erro ao criar personagem:', error);
+      const errorMessage = error?.message || 'Erro desconhecido ao criar personagem';
+      alert(`Erro ao criar personagem:\n\n${errorMessage}\n\nTente novamente.`);
     } finally {
       setCreating(false);
     }
@@ -326,17 +492,33 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
       case 3:
         return <Step3ClaTecnica data={data} updateData={updateData} />;
       case 4:
-        return <Step4Atributos data={data} updateData={updateData} />;
+        return <Step3_5Trilha data={data} updateData={updateData} />;
       case 5:
-        return <Step5Pericias data={data} updateData={updateData} />;
+        return <Step4Atributos data={data} updateData={updateData} />;
       case 6:
+        return <Step5Pericias data={data} updateData={updateData} />;
+      case 7:
+        return <Step7Poderes data={data} updateData={updateData} />;
+      case 8:
+        return (
+          <Step8Tecnicas 
+            nivel={data.nivel} 
+            estudouEscolaTecnica={data.estudouEscolaTecnica || false}
+            trilha={data.trilha}
+            subcaminho={data.subcaminhoMestreBarreiras}
+            cla={data.cla}
+            tecnicasAtuais={data.tecnicasBasicas} 
+            onUpdate={(novas) => updateData({ tecnicasBasicas: novas })} 
+          />
+        );
+      case 9:
         return <Step6Revisao data={data} />;
       default:
         return null;
     }
   };
 
-  const progress = (currentStep / 6) * 100;
+  const progress = (currentStep / 9) * 100;
   const validationError = getValidationError();
 
   return (
@@ -345,22 +527,48 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
         <div className="flex items-center justify-between mb-4">
           <CardTitle className="text-2xl text-white">✨ Criar Personagem</CardTitle>
           <span className="text-sm" style={{ color: '#cbd5e1' }}>
-            Passo {currentStep} de 6
+            Passo {currentStep} de 9
           </span>
         </div>
         <Progress value={progress} className="h-2" />
-        <div className="flex justify-between mt-2 text-xs" style={{ color: '#94a3b8' }}>
-          {STEPS.map((step) => (
-            <div
-              key={step.id}
-              className={`text-center ${
-                step.id === currentStep ? 'text-red-500 font-semibold' : ''
-              } ${step.id < currentStep ? 'text-green-500' : ''}`}
-            >
-              {step.id < currentStep && <CheckCircle className="w-4 h-4 inline mr-1" />}
-              {step.title}
-            </div>
-          ))}
+        
+        <div className="flex justify-between mt-2 gap-1">
+          {STEPS.map((step) => {
+            const isCompleted = step.id < currentStep;
+            const isCurrent = step.id === currentStep;
+            
+            return (
+              <div
+                key={`step-${step.id}`}
+                className="flex flex-col items-center"
+                style={{ flex: '1 1 0' }}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold transition-all ${
+                    isCompleted
+                      ? 'bg-green-500 text-white'
+                      : isCurrent
+                      ? 'bg-red-500 text-white'
+                      : 'bg-slate-700 text-slate-400'
+                  }`}
+                >
+                  {isCompleted ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    step.id
+                  )}
+                </div>
+                <span
+                  className={`text-xs mt-1 text-center ${
+                    isCurrent ? 'text-red-500 font-semibold' : isCompleted ? 'text-green-500' : 'text-slate-400'
+                  }`}
+                  style={{ fontSize: '0.7rem' }}
+                >
+                  {step.title}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </CardHeader>
 
@@ -378,13 +586,14 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
           <Button
             variant="outline"
             onClick={currentStep === 1 ? onCancel : handlePrevious}
-            className="bg-slate-600 border-slate-600 text-white hover:bg-slate-800"
+            disabled={creating}
+            className="bg-slate-600 border-slate-600 text-white hover:bg-slate-800 disabled:opacity-50"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             {currentStep === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
 
-          {currentStep < 6 ? (
+          {currentStep < 9 ? (
             <Button
               onClick={handleNext}
               disabled={!canProceed()}
@@ -397,10 +606,19 @@ export function CharacterCreationWizard({ onComplete, onCancel }: CharacterCreat
             <Button
               onClick={handleCreate}
               disabled={!canProceed() || creating}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 min-w-[200px]"
             >
-              {creating ? '⏳ Criando...' : '✅ Criar Personagem'}
-              <CheckCircle className="w-4 h-4 ml-2" />
+              {creating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Criar Personagem
+                </>
+              )}
             </Button>
           )}
         </div>

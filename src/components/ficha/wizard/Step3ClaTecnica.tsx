@@ -1,13 +1,16 @@
-// src/components/ficha/wizard/Step3ClaTecnica.tsx - COM SCROLL
+// src/components/ficha/wizard/Step3ClaTecnica.tsx - COM VALIDAÇÕES DE ORIGEM E PRESTÍGIO DO CLÃ
 
 import { useState, useMemo } from 'react';
 import { Card } from '../../ui/card';
 import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 import { CharacterCreationData } from '../CharacterCreationWizard';
 import { ClaType } from '../../../types/character';
 import { CLAS } from '../../../data/clas';
 import { TECNICAS_INATAS } from '../../../data/tecnicas-inatas';
-import { Crown, Sparkles, Search, CheckCircle } from 'lucide-react';
+import { Crown, Sparkles, Search, CheckCircle, AlertCircle, Award } from 'lucide-react';
+import { ORIGENS } from '../../../data/origens';
+import { calcularClassificacaoPrestigioCla, getCorPrestigioCla } from '../../../utils/prestigio';
 
 interface Step3ClaTecnicaProps {
   data: CharacterCreationData;
@@ -18,6 +21,19 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
   const [selectedCla, setSelectedCla] = useState<ClaType>(data.cla);
   const [selectedTecnica, setSelectedTecnica] = useState<string>(data.tecnicaInataId);
   const [searchTecnica, setSearchTecnica] = useState('');
+
+  // Verifica a origem escolhida
+  const origemData = ORIGENS.find(o => o.id === data.origemId);
+  const isProdigio = data.origemId === 'prodigio_cla';
+  const isRenegado = data.origemId === 'renegado';
+  const requerGrandeCla = isProdigio || isRenegado;
+
+  // Verifica se é um dos 3 grandes clãs
+  const isTresGrandesClas = ['gojo', 'zenin', 'kamo'].includes(selectedCla);
+
+  const classificacaoCla = (data.prestigioCla && data.prestigioCla > 0 && isTresGrandesClas) 
+    ? calcularClassificacaoPrestigioCla(data.prestigioCla)
+    : null;
 
   const handleClaSelect = (cla: ClaType) => {
     setSelectedCla(cla);
@@ -32,6 +48,15 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
 
   const claData = CLAS.find(c => c.id === selectedCla);
 
+  // Filtra clãs disponíveis baseado na origem
+  const clasDisponiveis = useMemo(() => {
+    if (requerGrandeCla) {
+      return CLAS.filter(c => c.grandesClas);
+    }
+    return CLAS;
+  }, [requerGrandeCla]);
+
+  // Filtra técnicas disponíveis baseado no clã E origem
   const tecnicasDisponiveis = useMemo(() => {
     let tecnicas = TECNICAS_INATAS;
     
@@ -39,10 +64,31 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
       const claData = CLAS.find(c => c.id === selectedCla);
       
       if (claData?.tecnicasHereditarias) {
-        tecnicas = TECNICAS_INATAS.filter(t => 
-          (t.tipo === 'hereditaria' && t.cla === selectedCla) || 
-          t.tipo === 'nao_hereditaria'
-        );
+        if (isProdigio) {
+          tecnicas = TECNICAS_INATAS.filter(t => {
+            if (t.tipo !== 'hereditaria') return false;
+            
+            if (Array.isArray(t.cla)) {
+              return t.cla.includes(selectedCla);
+            }
+            return t.cla === selectedCla;
+          });
+        } else if (isRenegado) {
+          tecnicas = TECNICAS_INATAS.filter(t => t.tipo === 'nao_hereditaria');
+        } else {
+          tecnicas = TECNICAS_INATAS.filter(t => {
+            if (t.tipo === 'nao_hereditaria') return true;
+            
+            if (t.tipo === 'hereditaria') {
+              if (Array.isArray(t.cla)) {
+                return t.cla.includes(selectedCla);
+              }
+              return t.cla === selectedCla;
+            }
+            
+            return false;
+          });
+        }
       } else {
         tecnicas = TECNICAS_INATAS.filter(t => t.tipo === 'nao_hereditaria');
       }
@@ -51,7 +97,7 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
     }
     
     return tecnicas;
-  }, [selectedCla]);
+  }, [selectedCla, isProdigio, isRenegado]);
 
   const tecnicasFiltradas = tecnicasDisponiveis.filter(t =>
     t.nome.toLowerCase().includes(searchTecnica.toLowerCase())
@@ -59,6 +105,42 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
 
   return (
     <div className="space-y-8">
+      {/* ALERTA SE FOR PRODÍGIO OU RENEGADO */}
+      {requerGrandeCla && (
+        <Card 
+          className="p-4"
+          style={{
+            backgroundColor: isProdigio ? 'rgba(29, 78, 216, 0.15)' : 'rgba(124, 45, 18, 0.2)',
+            borderColor: isProdigio ? '#3b82f6' : '#c2410c',
+            borderWidth: '2px'
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle 
+              className="w-5 h-5 flex-shrink-0 mt-0.5"
+              style={{ color: isProdigio ? '#60a5fa' : '#fdba74' }}
+            />
+            <div>
+              <p 
+                className="text-sm font-semibold mb-2"
+                style={{ color: isProdigio ? '#dbeafe' : '#fde68a' }}
+              >
+                {isProdigio ? '👑 Prodígio do Clã' : '⚔️ Renegado'}
+              </p>
+              <p 
+                className="text-xs mb-2"
+                style={{ color: isProdigio ? '#bfdbfe' : '#fef3c7' }}
+              >
+                {isProdigio 
+                  ? 'Você pode escolher apenas um dos 3 grandes clãs e APENAS técnicas hereditárias.'
+                  : 'Você pode escolher apenas um dos 3 grandes clãs, mas NÃO pode escolher técnicas hereditárias.'
+                }
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* ========== SEÇÃO DE CLÃS COM SCROLL ========== */}
       <div>
         <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
@@ -66,7 +148,10 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
           Escolha seu Clã
         </h3>
         <p className="mb-6" style={{ color: '#cbd5e1' }}>
-          Seu clã determina acesso a técnicas hereditárias e prestígio inicial.
+          {requerGrandeCla 
+            ? 'Sua origem limita a escolha aos 3 grandes clãs.'
+            : 'Seu clã determina acesso a técnicas hereditárias e prestígio inicial.'
+          }
         </p>
 
         <div 
@@ -77,7 +162,7 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
             paddingRight: '8px'
           }}
         >
-          {CLAS.map((cla) => {
+          {clasDisponiveis.map((cla) => {
             const isSelected = selectedCla === cla.id;
             const isGrandeCla = cla.grandesClas;
 
@@ -139,22 +224,88 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
         </div>
       </div>
 
+      {/* CAMPO DE PRESTÍGIO DO CLÃ (apenas para 3 grandes clãs) */}
+      {isTresGrandesClas && (
+        <Card 
+          className="p-4"
+          style={{
+            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+            borderColor: '#fbbf24',
+            borderWidth: '2px'
+          }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <Award className="w-5 h-5" style={{ color: '#fbbf24' }} />
+            <h4 className="text-lg font-semibold text-white">Prestígio do Clã</h4>
+          </div>
+          
+          <Label htmlFor="prestigioCla" className="text-white">
+            Pontos de Prestígio no {claData?.nome}
+          </Label>
+          <Input
+            id="prestigioCla"
+            type="number"
+            min="0"
+            max="100"
+            value={data.prestigioCla || 0}
+            onChange={(e) => updateData({ prestigioCla: Math.max(0, parseInt(e.target.value) || 0) })}
+            className="bg-slate-900 border-slate-700 text-white mt-2"
+          />
+          {classificacaoCla && (
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                style={{
+                  backgroundColor: '#1e293b',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: getCorPrestigioCla(classificacaoCla.classificacao),
+                  border: `1px solid ${getCorPrestigioCla(classificacaoCla.classificacao)}`,
+                  fontWeight: 600
+                }}
+              >
+                {classificacaoCla.label}
+              </span>
+            </div>
+          )}
+          <p className="text-xs mt-2" style={{ color: '#fde68a' }}>
+            Prestígio do clã influencia narrativa e acesso a habilidades secretas do clã.
+          </p>
+        </Card>
+      )}
+
       {/* ========== SEÇÃO DE TÉCNICAS COM SCROLL ========== */}
       <div>
+        <br></br>
         <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-purple-500" />
           Escolha sua Técnica Inata
         </h3>
         <p className="mb-4" style={{ color: '#cbd5e1' }}>
-          Sua técnica inata define seu estilo de combate e habilidades únicas.
+          {isProdigio 
+            ? 'Como prodígio, você só pode escolher técnicas hereditárias do seu clã.'
+            : isRenegado
+            ? 'Como renegado, você NÃO pode escolher técnicas hereditárias.'
+            : 'Sua técnica inata define seu estilo de combate e habilidades únicas.'
+          }
         </p>
 
         {claData && (
-          <div className="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+          <div 
+            className="mb-4 p-3 rounded-lg border"
+            style={{
+              backgroundColor: 'rgba(30, 41, 59, 0.5)',
+              borderColor: '#475569'
+            }}
+          >
             <p className="text-sm" style={{ color: '#e2e8f0' }}>
               <span className="font-semibold">Clã {claData.nome}:</span>{' '}
               <span style={{ color: '#94a3b8' }}>
-                {claData.tecnicasHereditarias
+                {isProdigio 
+                  ? `Apenas ${claData.tecnicasHereditarias?.length || 0} técnica(s) hereditária(s) disponível(is)`
+                  : isRenegado
+                  ? 'Apenas técnicas não-hereditárias disponíveis'
+                  : claData.tecnicasHereditarias
                   ? `Acesso a ${claData.tecnicasHereditarias.length} técnica(s) hereditária(s) + todas não-hereditárias`
                   : 'Apenas técnicas não-hereditárias disponíveis'
                 }
@@ -164,13 +315,21 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
         )}
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search 
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4"
+            style={{ color: '#94a3b8' }}
+          />
           <Input
             type="text"
             placeholder="Buscar técnica..."
             value={searchTecnica}
             onChange={(e) => setSearchTecnica(e.target.value)}
-            className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-400"
+            className="pl-10"
+            style={{
+              backgroundColor: '#1e293b',
+              borderColor: '#475569',
+              color: '#ffffff'
+            }}
           />
         </div>
 
@@ -237,11 +396,19 @@ export function Step3ClaTecnica({ data, updateData }: Step3ClaTecnicaProps) {
             })
           ) : (
             <div className="col-span-2 text-center py-8">
-              <p style={{ color: '#94a3b8' }}>Nenhuma técnica encontrada</p>
+              <p style={{ color: '#94a3b8' }}>
+                {isProdigio 
+                  ? 'Nenhuma técnica hereditária disponível para este clã'
+                  : isRenegado
+                  ? 'Nenhuma técnica não-hereditária encontrada'
+                  : 'Nenhuma técnica encontrada'
+                }
+              </p>
             </div>
           )}
         </div>
       </div>
+      <br></br>
     </div>
   );
 }

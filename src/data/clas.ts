@@ -16,7 +16,7 @@ export const CLAS: ClaData[] = [
     nome: 'Gojo',
     descricao: 'Um dos três grandes clãs. Conhecido pela técnica hereditária Infinito e pelos Seis Olhos.',
     grandesClas: true,
-    tecnicasHereditarias: ['infinito', '6_olhos', 'copiar'],
+    tecnicasHereditarias: ['infinito', 'copiar'],
   },
   {
     id: 'zenin',
@@ -37,7 +37,7 @@ export const CLAS: ClaData[] = [
     nome: 'Okkotsu',
     descricao: 'Descendentes de Sugawara no Michizane. Possuem grande quantidade de energia amaldiçoada.',
     grandesClas: false,
-    tecnicasHereditarias: ['infinito', '6_olhos', 'copiar'],
+    tecnicasHereditarias: ['infinito', 'copiar'],
   },
   {
     id: 'inumaki',

@@ -1,18 +1,28 @@
-// src/data/tecnicas-inatas.ts - COMPLETO COM TODAS AS TÉCNICAS
+// src/data/tecnicas-inatas.ts - TÉCNICAS COM ARRAY DE CLÃS
 
 import { TecnicaInataData, ClaType } from '../types/character';
 
 export const TECNICAS_INATAS: TecnicaInataData[] = [
 
-  // ========== TÉCNICAS HEREDITÁRIAS ==========
+  // ========== TÉCNICAS HEREDITÁRIAS COM MÚLTIPLOS CLÃS ==========
 
   {
     id: 'infinito',
     nome: 'Infinito',
     tipo: 'hereditaria',
-    cla: 'gojo' as ClaType,
+    cla: ['gojo', 'okkotsu'] as ClaType[], // ✅ AMBOS OS CLÃS
     descricao: 'Técnica que permite controlar o espaço em nível atômico, criando uma barreira infinita.',
   },
+  {
+    id: 'copiar',
+    nome: 'Copiar',
+    tipo: 'hereditaria',
+    cla: ['gojo', 'okkotsu'] as ClaType[], // ✅ AMBOS OS CLÃS
+    descricao: 'Capacidade de copiar técnicas de outros feiticeiros após observação.',
+  },
+
+  // ========== TÉCNICAS HEREDITÁRIAS - CLÃ ZENIN ==========
+
   {
     id: 'dez_sombras',
     nome: 'Técnica das 10 Sombras',
@@ -21,6 +31,23 @@ export const TECNICAS_INATAS: TecnicaInataData[] = [
     descricao: 'Permite invocar 10 shikigamis diferentes usando sombras como intermediárias.',
   },
   {
+    id: 'tecnica_projecao',
+    nome: 'Técnica de Projeção',
+    tipo: 'hereditaria',
+    cla: 'zenin' as ClaType,
+    descricao: 'Divide o movimento em 24 frames por segundo, permitindo prever e contra-atacar.',
+  },
+  {
+    id: 'plantas_desastre',
+    nome: 'Plantas do Desastre',
+    tipo: 'hereditaria',
+    cla: 'zenin' as ClaType,
+    descricao: 'Cria e controla plantas amaldiçoadas com propriedades letais.',
+  },
+
+  // ========== TÉCNICAS HEREDITÁRIAS - CLÃ KAMO ==========
+
+  {
     id: 'manipulacao_sangue',
     nome: 'Manipulação de Sangue',
     tipo: 'hereditaria',
@@ -28,25 +55,28 @@ export const TECNICAS_INATAS: TecnicaInataData[] = [
     descricao: 'Controle total sobre o próprio sangue e de outros seres, permitindo ataques e defesas.',
   },
   {
+    id: 'oceano_desastroso',
+    nome: 'Oceano Desastroso',
+    tipo: 'hereditaria',
+    cla: 'kamo' as ClaType,
+    descricao: 'Invoca uma onda massiva de energia amaldiçoada que inunda o campo de batalha.',
+  },
+  {
+    id: 'transfiguracao_ociosa',
+    nome: 'Transfiguração Ociosa',
+    tipo: 'hereditaria',
+    cla: 'kamo' as ClaType,
+    descricao: 'Permite remodelar a alma e corpo de alvos tocados.',
+  },
+
+  // ========== OUTRAS TÉCNICAS HEREDITÁRIAS ==========
+
+  {
     id: 'fala_amaldicoada',
     nome: 'Fala Amaldiçoada',
     tipo: 'hereditaria',
     cla: 'inumaki' as ClaType,
     descricao: 'Palavras se tornam comandos absolutos que obrigam o alvo a obedecer.',
-  },
-  {
-    id: 'copiar',
-    nome: 'Copiar',
-    tipo: 'hereditaria',
-    cla: 'okkotsu' as ClaType,
-    descricao: 'Capacidade de copiar técnicas de outros feiticeiros após observação.',
-  },
-  {
-    id: 'tecnica_projecao',
-    nome: 'Técnica de Projeção',
-    tipo: 'hereditaria',
-    cla: 'zenin' as ClaType,
-    descricao: 'Divide o movimento em 24 frames por segundo, permitindo prever e contra-atacar.',
   },
   {
     id: 'santuario',
@@ -68,27 +98,6 @@ export const TECNICAS_INATAS: TecnicaInataData[] = [
     tipo: 'hereditaria',
     cla: 'ryomen' as ClaType,
     descricao: 'Invoca chamas negras devastadoras que consomem energia amaldiçoada.',
-  },
-  {
-    id: 'plantas_desastre',
-    nome: 'Plantas do Desastre',
-    tipo: 'hereditaria',
-    cla: 'zenin' as ClaType,
-    descricao: 'Cria e controla plantas amaldiçoadas com propriedades letais.',
-  },
-  {
-    id: 'oceano_desastroso',
-    nome: 'Oceano Desastroso',
-    tipo: 'hereditaria',
-    cla: 'kamo' as ClaType,
-    descricao: 'Invoca uma onda massiva de energia amaldiçoada que inunda o campo de batalha.',
-  },
-  {
-    id: 'transfiguracao_ociosa',
-    nome: 'Transfiguração Ociosa',
-    tipo: 'hereditaria',
-    cla: 'kamo' as ClaType,
-    descricao: 'Permite remodelar a alma e corpo de alvos tocados.',
   },
   {
     id: 'furia_agni',

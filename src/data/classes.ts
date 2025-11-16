@@ -1,6 +1,6 @@
 // src/data/classes.ts - COMPLETO COM TODAS AS INFORMAÇÕES DAS CLASSES
 
-import { ClasseType } from '../types/character';
+import { ClasseType, ProficienciaType } from '../types/character';
 
 export interface ClasseData {
   id: ClasseType;
@@ -29,6 +29,9 @@ export interface ClasseData {
   
   // Benefícios e características
   beneficios: string[];
+
+  // Proficiências da classe
+  proficiencias: ProficienciaType[];
 }
 
 export const CLASSES: ClasseData[] = [
@@ -66,6 +69,12 @@ export const CLASSES: ClasseData[] = [
       'Poderes voltados para dano e resistência',
       'Acesso a trilhas de ataque devastadoras',
     ],
+
+    proficiencias: [
+      ProficienciaType.ARMAS_SIMPLES,
+      ProficienciaType.ARMAS_TATICAS,
+      ProficienciaType.PROTECOES_LEVES,
+    ],
   },
   
   {
@@ -98,6 +107,11 @@ export const CLASSES: ClasseData[] = [
       'Acesso a habilidades de suporte',
       'Versatilidade tática',
     ],
+
+    proficiencias: [
+      ProficienciaType.ARMAS_SIMPLES,
+      ProficienciaType.ARMAS_TATICAS,
+    ],
   },
   
   {
@@ -124,6 +138,11 @@ export const CLASSES: ClasseData[] = [
       'Mais EA para uso de técnicas',
       'Maior quantidade de perícias',
       'Acesso a múltiplos aprimoramentos',
+    ],
+
+    proficiencias: [
+      ProficienciaType.ARMAS_SIMPLES,
+      ProficienciaType.PROTECOES_LEVES,
     ],
   },
 ];

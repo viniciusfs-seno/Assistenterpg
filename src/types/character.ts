@@ -1,4 +1,7 @@
-// src/types/character.ts
+// src/types/character.ts - COMPLETO E CORRIGIDO
+
+import { calcularBonusPoderes } from '../utils/poderEffects';
+import { calcularStats as calcularStatsImpl, CalculatedStats } from '../utils/statsCalculator';
 
 // ============= ENUMS E CONSTANTES =============
 
@@ -69,6 +72,56 @@ export enum GrauTreinamento {
   EXPERT = 20,
 }
 
+// ✅ CORRIGIDO: Proficiências expandidas
+export enum ProficienciaType {
+  // Armas Base
+  ARMAS_SIMPLES = 'armas_simples',
+  ARMAS_TATICAS = 'armas_taticas',
+  ARMAS_PESADAS = 'armas_pesadas',
+
+  // ✅ NOVO: Subcategorias de Armas Táticas
+  ARMAS_TATICAS_CORPO_A_CORPO = 'armas_taticas_corpo_a_corpo',
+  ARMAS_TATICAS_DISPARO = 'armas_taticas_disparo',
+  ARMAS_TATICAS_FOGO = 'armas_taticas_fogo',
+
+  // ✅ NOVO: Armas Amaldiçoadas
+  ARMAS_AMALDICOADAS = 'armas_amaldicoadas',
+
+  // Proteções
+  PROTECOES_LEVES = 'protecoes_leves',
+  PROTECOES_PESADAS = 'protecoes_pesadas',
+
+  // Itens Amaldiçoados
+  ITENS_AMALDICOADOS = 'itens_amaldicoados',
+}
+
+// NOVOS ENUMS PARA PRESTÍGIO
+export enum LimiteCredito {
+  BAIXO = 'baixo',
+  MEDIO = 'medio',
+  ALTO = 'alto',
+  ILIMITADO = 'ilimitado',
+}
+
+export enum PrestigioClaClassificacao {
+  NENHUM = 'nenhum',
+  BAIXO = 'baixo',
+  MEDIO = 'medio',
+  ALTO = 'alto',
+  LIDER = 'lider',
+}
+
+// ============= NOVO: CATEGORIAS DE TÉCNICAS BÁSICAS =============
+
+export enum CategoriaTecnica {
+  TECNICA_AMALDICOADA = 'tecnica_amaldicoada',
+  BARREIRA = 'barreira',
+  REVERSA = 'reversa',
+  ANTI_BARREIRA = 'anti_barreira',
+  SHIKIGAMI = 'shikigami',
+  TECNICAS_SECRETAS = 'tecnicas_secretas', // ✅ NOVO
+}
+
 // ============= ATRIBUTOS =============
 
 export interface Attributes {
@@ -90,34 +143,61 @@ export interface Skill {
 
 // Lista completa das 27 perícias
 export const PERICIAS_BASE = [
-  { nome: 'Acrobacia', atributoBase: 'agilidade' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Adestramento', atributoBase: 'presenca' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Artes', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Atletismo', atributoBase: 'forca' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Atualidades', atributoBase: 'intelecto' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Ciências', atributoBase: 'intelecto' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Crime', atributoBase: 'agilidade' as const, treinada: true, kit: true, carga: false },
-  { nome: 'Diplomacia', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Enganação', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Fortitude', atributoBase: 'vigor' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Furtividade', atributoBase: 'agilidade' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Iniciativa', atributoBase: 'agilidade' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Intimidação', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Intuição', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Investigação', atributoBase: 'intelecto' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Jujutsu', atributoBase: 'intelecto' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Luta', atributoBase: 'forca' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Medicina', atributoBase: 'intelecto' as const, treinada: true, kit: true, carga: false },
-  { nome: 'Percepção', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Pilotagem', atributoBase: 'agilidade' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Pontaria', atributoBase: 'agilidade' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Profissão', atributoBase: 'intelecto' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Reflexos', atributoBase: 'agilidade' as const, treinada: false, kit: false, carga: true },
-  { nome: 'Religião', atributoBase: 'presenca' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Sobrevivência', atributoBase: 'intelecto' as const, treinada: false, kit: false, carga: false },
-  { nome: 'Tática', atributoBase: 'intelecto' as const, treinada: true, kit: false, carga: false },
-  { nome: 'Vontade', atributoBase: 'presenca' as const, treinada: false, kit: false, carga: false },
+  { nome: 'Acrobacia', atributoBase: 'agilidade' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Adestramento', atributoBase: 'presenca' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Artes', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Atletismo', atributoBase: 'forca' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Atualidades', atributoBase: 'intelecto' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Ciências', atributoBase: 'intelecto' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Crime', atributoBase: 'agilidade' as const, somenteComTreinamento: true, kit: true, carga: false },
+  { nome: 'Diplomacia', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Enganação', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Fortitude', atributoBase: 'vigor' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Furtividade', atributoBase: 'agilidade' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Iniciativa', atributoBase: 'agilidade' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Intimidação', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Intuição', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Investigação', atributoBase: 'intelecto' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Jujutsu', atributoBase: 'intelecto' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Luta', atributoBase: 'forca' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Medicina', atributoBase: 'intelecto' as const, somenteComTreinamento: true, kit: true, carga: false },
+  { nome: 'Percepção', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Pilotagem', atributoBase: 'agilidade' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Pontaria', atributoBase: 'agilidade' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Profissão', atributoBase: 'intelecto' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Reflexos', atributoBase: 'agilidade' as const, somenteComTreinamento: false, kit: false, carga: true },
+  { nome: 'Religião', atributoBase: 'presenca' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Sobrevivência', atributoBase: 'intelecto' as const, somenteComTreinamento: false, kit: false, carga: false },
+  { nome: 'Tática', atributoBase: 'intelecto' as const, somenteComTreinamento: true, kit: false, carga: false },
+  { nome: 'Vontade', atributoBase: 'presenca' as const, somenteComTreinamento: false, kit: false, carga: false },
 ];
+
+// Helper que inicializa todas as perícias com grau adequado para personagem novo
+export function gerarMapaPericiaGrados(periciasTreinadas: string[]): { [nome: string]: GrauTreinamento } {
+  const mapa: { [nome: string]: GrauTreinamento } = {};
+  for (const pericia of PERICIAS_BASE) {
+    mapa[pericia.nome] = periciasTreinadas.includes(pericia.nome) ? GrauTreinamento.TREINADO : GrauTreinamento.DESTREINADO;
+  }
+  return mapa;
+}
+
+// ============= PRESTÍGIO =============
+
+export interface LimiteItens {
+  categoria4: number;
+  categoria3: number;
+  categoria2: number;
+  categoria1: number;
+  especial: number;
+}
+
+export interface BeneficiosPrestigio {
+  grauFeiticeiro: GrauFeiticeiro;
+  grauFeiticeiroLabel: string;
+  limiteCredito: LimiteCredito;
+  limiteCreditoLabel: string;
+  limiteItens: LimiteItens;
+}
 
 // ============= CARACTERÍSTICAS DERIVADAS =============
 
@@ -131,61 +211,28 @@ export interface CharacterStats {
   eaMax: number;
   sanAtual: number;
   sanMax: number;
-  
-  // Combate
-  defesa: number;
+
+  // Combate - Defesa Detalhada
+  defesa: number; // Total
   defesaBase: number; // 10 + AGI
   defesaEquipamento: number;
   defesaOutros: number;
-  
-  rd: number;
+
+  // RD (Redução de Dano)
+  rd: number; // Total
   rdEquipamento: number;
   rdOutros: number;
-  
+
   // Movimento
   deslocamento: number;
-  
-  // Limite por rodada
+
+  // Limite por rodada (CORRIGIDO)
   limitePE_EA: number; // = nivel
-  
+
   // Estados críticos
   morrendo: number; // 0-4
   enlouquecendo: number; // 0-3
 }
-
-// Fórmulas de cálculo por classe
-export const CLASS_STATS = {
-  combatente: {
-    pvInicial: 20,
-    pvPorNivel: (vig: number) => 4 + vig,
-    peInicial: 3,
-    pePorNivel: (pre: number) => 3 + pre,
-    eaInicial: 3,
-    eaPorNivel: (intOuPre: number) => 3 + intOuPre,
-    sanInicial: 12,
-    sanPorNivel: 3,
-  },
-  sentinela: {
-    pvInicial: 16,
-    pvPorNivel: (vig: number) => 2 + vig,
-    peInicial: 3,
-    pePorNivel: (pre: number) => 3 + pre,
-    eaInicial: 4,
-    eaPorNivel: (intOuPre: number) => 4 + intOuPre,
-    sanInicial: 12,
-    sanPorNivel: 4,
-  },
-  especialista: {
-    pvInicial: 16,
-    pvPorNivel: (vig: number) => 3 + vig,
-    peInicial: 3,
-    pePorNivel: (pre: number) => 3 + pre,
-    eaInicial: 4,
-    eaPorNivel: (intOuPre: number) => 4 + intOuPre,
-    sanInicial: 16,
-    sanPorNivel: 4,
-  },
-} as const;
 
 // ============= FICHA COMPLETA =============
 
@@ -199,26 +246,45 @@ export interface Character {
   avatarUrl?: string;
   jogador?: string;
   alinhamento?: string;
-  
+
   // Sistema Base
   atributos: Attributes;
   nivel: number; // 1-20
   classe: ClasseType;
   trilha?: TrilhaType; // null até nível 2
+  subcaminhoMestreBarreiras?: string; // apenas para Mestre de Barreiras
   origemId: string;
-  
+  proficiencias?: ProficienciaType[];
+
   // Jujutsu
   cla: ClaType;
   tecnicaInataId: string;
-  
+
+  // NOVO: Escolha do atributo para cálculo de EA
+  atributoEA: 'intelecto' | 'presenca';
+
+  // NOVO: Se estudou na Escola Técnica Jujutsu (ganha perícia Jujutsu de graça)
+  estudouEscolaTecnica?: boolean;
+
   // Características (calculadas mas salvas para performance)
   stats: CharacterStats;
-  
+
+  // Grau de treinamento de todas as perícias
+  periciaGrados: { [nome: string]: GrauTreinamento };
+  // Bônus extras (opcional, pode ser omitido)
+  periciasBonusExtra?: { [pericia: string]: number };
+
   // Prestígio
   grauFeiticeiro: GrauFeiticeiro;
   pontosPrestígio: number;
   prestigioCla?: number; // apenas para 3 grandes clãs
-  
+
+  // Poderes de classe
+  poderesIds: string[]; // IDs dos poderes escolhidos
+
+  // NOVO: Técnicas Básicas (Graus de Aprimoramento)
+  tecnicasBasicas: { [categoria in CategoriaTecnica]: number }; // categoria → grau (0-5)
+
   // Meta
   createdAt: string;
   updatedAt: string;
@@ -241,11 +307,11 @@ export interface CharacterPower {
   nivelObtido: number;
 }
 
-export interface CharacterSpell {
+// ATUALIZADO: Interface para técnicas básicas
+export interface CharacterTechnique {
   id: string;
   characterId: string;
-  spellCategory: 'tecnica_amaldicoada' | 'barreira' | 'reversa' | 'anti_barreira' | 'shikigami';
-  spellName: string;
+  categoria: CategoriaTecnica;
   grauAprimoramento: number; // 0-5
 }
 
@@ -253,6 +319,7 @@ export interface CharacterInventoryItem {
   id: string;
   characterId: string;
   equipmentId: string;
+  item?: any; // ✅ FUTURO: Tipagem completa de Item
   quantidade: number;
   equipado: boolean;
 }
@@ -260,56 +327,98 @@ export interface CharacterInventoryItem {
 export interface CharacterProficiency {
   id: string;
   characterId: string;
-  proficiencyType: 'armas_simples' | 'armas_taticas' | 'armas_pesadas' | 'armas_amaldicoadas';
+  proficiencyType: ProficienciaType;
 }
 
 // ============= HELPERS DE CÁLCULO =============
 
+/**
+ * Calcula todos os stats do personagem
+ * ✅ CORRIGIDO: Usa implementação de statsCalculator.ts
+ */
 export function calcularStats(
   nivel: number,
   classe: ClasseType,
   atributos: Attributes,
-  poderes: CharacterPower[],
-  equipamentos: CharacterInventoryItem[]
+  atributoEA: 'intelecto' | 'presenca',
+  poderesIds: string[] = [],
+  equipamentos: CharacterInventoryItem[] = []
 ): CharacterStats {
-  const classStats = CLASS_STATS[classe];
-  
-  // Calcular máximos
-  const pvMax = classStats.pvInicial + atributos.vigor + 
-                (classStats.pvPorNivel(atributos.vigor) * (nivel - 1));
-  
-  const peMax = classStats.peInicial + atributos.presenca + 
-                (classStats.pePorNivel(atributos.presenca) * (nivel - 1));
-  
-  const intOuPre = Math.max(atributos.intelecto, atributos.presenca);
-  const eaMax = classStats.eaInicial + intOuPre + 
-                (classStats.eaPorNivel(intOuPre) * (nivel - 1));
-  
-  const sanMax = classStats.sanInicial + (classStats.sanPorNivel * (nivel - 1));
-  
-  // Defesa base
-  const defesaBase = 10 + atributos.agilidade;
-  
+  console.log('🔄 [character.ts] Chamando calcularStats', {
+    nivel,
+    classe,
+    atributos,
+    atributoEA,
+    poderesIds,
+    equipamentos: equipamentos.length
+  });
+
+  // GrauFeiticeiro placeholder (mantido por compatibilidade, não usado no cálculo)
+  const grauFeiticeiro = GrauFeiticeiro.GRAU_4;
+
+  // ✅ Chamar implementação real de statsCalculator.ts
+  // Equipamentos serão calculados automaticamente pela função
+  const stats: CalculatedStats = calcularStatsImpl(
+    classe,
+    nivel,
+    atributos,
+    grauFeiticeiro,
+    atributoEA,
+    equipamentos, // ✅ Já preparado para suportar equipamentos
+    0, // defesaEquipamento (calculado automaticamente)
+    0, // defesaOutros
+    0, // rdEquipamento (calculado automaticamente)
+    0  // rdOutros
+  );
+
+  console.log('✅ [character.ts] Stats calculados', stats);
+
+  // Converter CalculatedStats para CharacterStats (são compatíveis)
   return {
-    pvAtual: pvMax,
-    pvMax,
-    peAtual: peMax,
-    peMax,
-    eaAtual: eaMax,
-    eaMax,
-    sanAtual: sanMax,
-    sanMax,
-    defesa: defesaBase,
-    defesaBase,
-    defesaEquipamento: 0, // calcular baseado em equipamentos
-    defesaOutros: 0,
-    rd: 0,
-    rdEquipamento: 0,
-    rdOutros: 0,
-    deslocamento: 9,
-    limitePE_EA: nivel,
-    morrendo: 0,
-    enlouquecendo: 0,
+    pvAtual: stats.pvAtual,
+    pvMax: stats.pvMax,
+    peAtual: stats.peAtual,
+    peMax: stats.peMax,
+    eaAtual: stats.eaAtual,
+    eaMax: stats.eaMax,
+    sanAtual: stats.sanAtual,
+    sanMax: stats.sanMax,
+    defesa: stats.defesa,
+    defesaBase: stats.defesaBase,
+    defesaEquipamento: stats.defesaEquipamento,
+    defesaOutros: stats.defesaOutros,
+    rd: stats.rd,
+    rdEquipamento: stats.rdEquipamento,
+    rdOutros: stats.rdOutros,
+    deslocamento: stats.deslocamento,
+    limitePE_EA: stats.limitePE_EA,
+    morrendo: Math.floor(stats.pvMax / 2),
+    enlouquecendo: Math.floor(stats.sanMax / 2),
+  };
+}
+
+// ============= HELPERS PARA TÉCNICAS =============
+
+/**
+ * Calcula quantos pontos de aprimoramento o personagem tem disponível
+ * Ganha 1 ponto nos níveis: 2, 8, 14, 18
+ */
+export function calcularPontosAprimoramentoDisponiveis(nivel: number): number {
+  const niveisComPonto = [2, 8, 14, 18];
+  return niveisComPonto.filter(n => nivel >= n).length;
+}
+
+/**
+ * Inicializa técnicas básicas com grau 0
+ */
+export function inicializarTecnicasBasicas(): { [categoria in CategoriaTecnica]: number } {
+  return {
+    [CategoriaTecnica.TECNICA_AMALDICOADA]: 0,
+    [CategoriaTecnica.BARREIRA]: 0,
+    [CategoriaTecnica.REVERSA]: 0,
+    [CategoriaTecnica.ANTI_BARREIRA]: 0,
+    [CategoriaTecnica.SHIKIGAMI]: 0,
+    [CategoriaTecnica.TECNICAS_SECRETAS]: 0, // ✅ NOVO
   };
 }
 
@@ -328,14 +437,7 @@ export interface TecnicaInataData {
   id: string;
   nome: string;
   tipo: 'hereditaria' | 'nao_hereditaria';
-  cla?: ClaType;
+  cla: ClaType | ClaType[] | null;
   descricao: string;
-  // passiva foi REMOVIDO (não existe mais)
-}
-
-export interface PoderClasseData {
-  id: string;
-  nome: string;
-  descricao: string;
-  prerequisitos: string[];
+  requisitos?: string;
 }

@@ -1,6 +1,4 @@
-// App.tsx — Sistema v2.0 integrado (mantém estrutura original) - CORRIGIDO
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { PaginaLogin } from './components/PaginaLogin';
 import { PaginaMenuPrincipal } from './components/PaginaMenuPrincipal';
@@ -10,7 +8,6 @@ import { CharacterCreationWizard } from './components/ficha/CharacterCreationWiz
 import { FichaPersonagemCompleta } from './components/ficha/FichaPersonagemCompleta';
 import { Sword } from 'lucide-react';
 
-// Tipo para controlar qual tela mostrar
 type AppView = 
   | { type: 'menu' }
   | { type: 'room'; code: string; isDM: boolean }
@@ -18,49 +15,47 @@ type AppView =
   | { type: 'character-create' }
   | { type: 'character-view'; characterId: string };
 
-// Componente que controla a navegação interna
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>({ type: 'menu' });
+  const [characterListRefresh, setCharacterListRefresh] = useState(0);
 
-  // ========== HANDLERS DE NAVEGAÇÃO ==========
-  
-  // Handler: entrar em uma sala
+  // Handlers de navegação
   const handleJoinRoom = (roomCode: string, isDM: boolean) => {
     setCurrentView({ type: 'room', code: roomCode, isDM });
   };
 
-  // Handler: sair da sala
   const handleLeaveRoom = () => {
     setCurrentView({ type: 'menu' });
   };
 
-  // Handler: ir para lista de personagens
   const handleNavigateToCharacters = () => {
     setCurrentView({ type: 'characters' });
   };
 
-  // Handler: ir para criação de personagem
   const handleNavigateToCharacterCreate = () => {
     setCurrentView({ type: 'character-create' });
   };
 
-  // Handler: ir para visualização de personagem
   const handleNavigateToCharacterView = (characterId: string) => {
     setCurrentView({ type: 'character-view', characterId });
   };
 
-  // Handler: voltar ao menu principal
   const handleBackToMenu = () => {
     setCurrentView({ type: 'menu' });
   };
 
-  // Handler: voltar para lista de personagens
   const handleBackToCharacters = () => {
     setCurrentView({ type: 'characters' });
   };
 
-  // ========== LOADING ==========
+  // Novo handler para atualizar lista de personagens após criação
+  const handleCharacterCreated = (characterId: string) => {
+    setCharacterListRefresh(r => r + 1);
+    setCurrentView({ type: 'character-view', characterId });
+  };
+
+  // Loading e autenticação
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
@@ -72,14 +67,11 @@ function AppContent() {
     );
   }
 
-  // ========== NÃO AUTENTICADO ==========
   if (!user) {
     return <PaginaLogin />;
   }
 
-  // ========== RENDERIZAÇÃO BASEADA NA VIEW ATUAL ==========
-  
-  // Dentro de uma sala
+  // Renderiza conteúdo baseado na view atual
   if (currentView.type === 'room') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -102,28 +94,26 @@ function AppContent() {
     );
   }
 
-  // Lista de personagens - CORRIGIDO
   if (currentView.type === 'characters') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
         <div className="container mx-auto px-4">
           <CharacterList
-            onSelectCharacter={handleNavigateToCharacterView}  // ✅ CORRIGIDO
+            onSelectCharacter={handleNavigateToCharacterView}
             onCreateNew={handleNavigateToCharacterCreate}
+            refreshTrigger={characterListRefresh}
           />
         </div>
       </div>
     );
   }
 
-
-  // Criação de personagem - CORRIGIDO: Adicionado background consistente
   if (currentView.type === 'character-create') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
         <div className="container mx-auto px-4">
           <CharacterCreationWizard
-            onComplete={handleNavigateToCharacterView}
+            onComplete={handleCharacterCreated}
             onCancel={handleBackToCharacters}
           />
         </div>
@@ -131,12 +121,11 @@ function AppContent() {
     );
   }
 
-  // Visualização de personagem
   if (currentView.type === 'character-view') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8">
         <div className="container mx-auto px-4">
-          <FichaPersonagemCompleta
+          <FichaPersonagemCompleta 
             characterId={currentView.characterId}
             onBack={handleBackToCharacters}
           />
@@ -145,7 +134,6 @@ function AppContent() {
     );
   }
 
-  // Menu principal (padrão)
   return (
     <PaginaMenuPrincipal 
       onJoinRoom={handleJoinRoom}
@@ -154,7 +142,6 @@ function AppContent() {
   );
 }
 
-// Exporta a aplicação envelopada pelo AuthProvider
 export default function App() {
   return (
     <AuthProvider>
